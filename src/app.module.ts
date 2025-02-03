@@ -14,6 +14,14 @@ import { PermissionModule } from './modules/permission/permission.module';
 import { RoleModule } from './modules/role/role.module';
 import { AuthModule } from './modules/auth/auth.module';
 
+
+import { TeacherModule } from './modules/teachersay/teachers/teacher.module';
+import { AchievementTypeModule  } from './modules/teachersay/achievement-types/achievement-type.module';
+import { AchievementModule} from './modules/teachersay/achievements/achievement.module';
+import { OrderModule } from './modules/order/order.module';
+import { ePayModule } from './modules/epay/epay.module';
+import { ProductsModule } from './modules/product/products.module';
+import { SystemModule } from './modules/system/system.module';
 @Module({
   imports: [
     /* 配置文件模块 */
@@ -26,8 +34,15 @@ import { AuthModule } from './modules/auth/auth.module';
     PermissionModule,
     RoleModule,
     AuthModule,
-
     SharedModule,
+    
+    TeacherModule,
+    SystemModule,
+    AchievementTypeModule,
+    AchievementModule,
+    OrderModule,
+    ePayModule,
+    ProductsModule
   ],
 })
 export class AppModule {}
