@@ -1,11 +1,3 @@
-/**********************************
- * @Author: Ronnie Zhang
- * @LastEditor: Ronnie Zhang
- * @LastEditTime: 2023/12/07 20:28:50
- * @Email: zclzone@outlook.com
- * Copyright © 2023 Ronnie Zhang(大脸怪) | https://isme.top
- **********************************/
-
 import {
   Column,
   CreateDateColumn,
@@ -18,6 +10,7 @@ import {
 } from 'typeorm';
 import { Profile } from './profile.entity';
 import { Role } from '@/modules/role/role.entity';
+import { Teacher } from '../teachersay/teachers/teacher.entity';
 
 @Entity()
 export class User {
@@ -50,4 +43,9 @@ export class User {
   })
   @JoinTable()
   roles: Role[];
+
+  @OneToOne(() => Teacher, (teacher) => teacher.user, {
+    cascade: true, // 允许级联操作
+  })
+  teacher: Teacher;
 }

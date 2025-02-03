@@ -1,12 +1,3 @@
-/**********************************
- * @Description: 公共模块
- * @Author: Ronnie Zhang
- * @LastEditor: Ronnie Zhang
- * @LastEditTime: 2023/12/07 20:29:25
- * @Email: zclzone@outlook.com
- * Copyright © 2023 Ronnie Zhang(大脸怪) | https://isme.top
- **********************************/
-
 import { Global, Module, ValidationPipe } from '@nestjs/common';
 import { SharedService } from './shared.service';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
@@ -23,6 +14,8 @@ import { createClient } from 'redis';
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
+        console.log('DB_HOST', process.env.DB_HOST || configService.get('DB_HOST'))
+        
         return {
           type: 'mysql',
           autoLoadEntities: true,
@@ -43,11 +36,28 @@ import { createClient } from 'redis';
     {
       inject: [ConfigService],
       provide: 'REDIS_CLIENT',
-      async useFactory(configService: ConfigService) {
+      useFactory: async (configService: ConfigService) => {
+        const redisUrl = configService.get<string>('HOST_IP');
+        const redisUsername = configService.get<string>('REDIS_USERNAME', 'default');
+        const redisPassword = configService.get<string>('REDIS_PASSWORD');
+        const redisPort = configService.get<number>('REDIS_PORT', 6739);
+        
+        if (!redisUrl || !redisPassword) {
+          throw new Error('Missing Redis configuration values');
+        }
+        
         const client = createClient({
-          url: configService.get('REDIS_URL'),
+          socket: {
+            host: redisUrl,
+            port: redisPort,
+          },
+          username: redisUsername,
+          password: redisPassword,
         });
+    
+        client.on('error', (err) => console.error('Redis Client Error', err));
         await client.connect();
+        console.log('✅ Redis 连接成功');
         return client;
       },
     },

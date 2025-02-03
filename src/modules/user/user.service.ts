@@ -1,15 +1,7 @@
-/**********************************
- * @Author: Ronnie Zhang
- * @LastEditor: Ronnie Zhang
- * @LastEditTime: 2023/12/07 20:29:09
- * @Email: zclzone@outlook.com
- * Copyright © 2023 Ronnie Zhang(大脸怪) | https://isme.top
- **********************************/
-
 import { hashSync } from 'bcryptjs';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Like, Repository } from 'typeorm';
+import { EntityManager, In, Like, Repository } from 'typeorm';
 import { CreateUserDto, GetUserDto, UpdateProfileDto, UpdateUserDto } from './dto';
 import { User } from './user.entity';
 import { Profile } from './profile.entity';
@@ -19,10 +11,8 @@ import { Role } from '@/modules/role/role.entity';
 @Injectable()
 export class UserService {
   constructor(
-    @InjectRepository(User)
-    private userRep: Repository<User>,
-    @InjectRepository(Profile)
-    private profileRep: Repository<Profile>,
+    @InjectRepository(User)private userRep: Repository<User>,
+    @InjectRepository(Profile) private profileRep: Repository<Profile>,
     @InjectRepository(Role) private roleRepo: Repository<Role>,
   ) {}
 
@@ -46,6 +36,29 @@ export class UserService {
     newUser.password = hashSync(newUser.password);
     await this.userRep.save(newUser);
     return true;
+  }
+  // 添加一个可选的 EntityManager 参数
+  async createOne(user: CreateUserDto, manager?: EntityManager): Promise<User> {
+    const { username } = user;
+    const existUser = await this.findByUsername(username, manager);
+
+    if (existUser) {
+      throw new CustomException(ErrorCode.ERR_10001);
+    }
+
+    const newUser = this.userRep.create(user);
+    if (user.roleIds !== undefined) {
+      newUser.roles = await (manager ? manager.getRepository(Role) : this.roleRepo).find({
+        where: { id: In(user.roleIds) },
+      });
+    }
+    if (!newUser.profile) {
+      newUser.profile = (manager ? manager.getRepository(Profile) : this.profileRep).create();
+    }
+    newUser.password = hashSync(newUser.password);
+    
+    // 使用传入的 EntityManager 或默认的 Repository
+    return await (manager ? manager.getRepository(User) : this.userRep).save(newUser);
   }
 
   async findAll(query: GetUserDto) {
@@ -101,7 +114,6 @@ export class UserService {
       .execute();
     return true;
   }
-
   async update(id: number, user: UpdateUserDto) {
     const findUser = await this.findUserProfile(id);
     if (user.roleIds !== undefined) {
@@ -128,8 +140,17 @@ export class UserService {
     return true;
   }
 
-  async findByUsername(username: string) {
-    return this.userRep.findOne({
+  async findByUsername(username: string, manager?: EntityManager) {
+    return  manager
+    ? manager.getRepository(User).findOne({
+      where: { username },
+      select: ['id', 'username', 'password', 'enable'],
+      relations: {
+        profile: true,
+        roles: true,
+      },
+    }):
+    this.userRep.findOne({
       where: { username },
       select: ['id', 'username', 'password', 'enable'],
       relations: {

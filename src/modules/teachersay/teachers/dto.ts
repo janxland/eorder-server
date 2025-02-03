@@ -1,9 +1,9 @@
+import { All, Optional } from '@nestjs/common';
 import { Exclude } from 'class-transformer';
 import {
   Allow,
   IsArray,
   IsBoolean,
-  isNotEmpty,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -47,20 +47,16 @@ export class CreateUserDto {
   roleIds?: number[];
 }
 
-export class createTeacherDto {
-  @IsNotEmpty({ message: '用户信息不能为空' })
-  createUserDto: CreateUserDto;
-  name: string;
-}
 export class UpdateUserDto {
   @Exclude()
   password: string;
 
   @Exclude()
+  @Allow()
   profile?: Profile;
 
   @IsString()
-  @IsNotEmpty({ message: '用户名不能为空' })
+  @Optional()
   @Length(2, 20, {
     message: `用户名长度必须大于$constraint1到$constraint2之间，当前传递的值是$value`,
   })
@@ -76,7 +72,33 @@ export class UpdateUserDto {
   roleIds?: number[];
 }
 
-export class UpdateProfileDto extends Profile {}
+export class updateTeacherDto {
+  @IsString()
+  @IsNotEmpty({ message: '姓名不能为空' })
+  @Optional()
+  name: string;
+
+  @Allow()
+  phoneNumber: string;
+
+  @Allow()
+  department: string;
+
+  @Allow()
+  office: string;
+
+  @Allow()
+  user: UpdateUserDto
+
+  @Allow()
+  researchArea: string;
+
+}
+
+export class UpdateProfileDto extends Profile {
+
+
+}
 
 export class GetUserDto {
   @Allow()
