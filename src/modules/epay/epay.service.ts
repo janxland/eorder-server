@@ -147,30 +147,22 @@ export class ePayService {
         const savedOrder = await this.orderRepository.save(newOrder);
         // 回调处理
         if (params.verifyNotifyURL) {
-          await this.sendCallback(params.verifyNotifyURL, {
-            code: RCode.OK,
-            msg: '订单生成成功',
-            data: {
-              money: newOrder.amount,
-              orderId: savedOrder.orderId,
-              code_url: response.qrcode,
-              type: response.type,
-              trade_no: response.trade_no,
-            },
-          });
-        }
-        this.rabbitMQService.sendPaymentMessage("CREAT",savedOrder);
-        return { 
-          code: RCode.OK, 
-          msg: '订单生成成功', 
-          data: { 
+          await this.sendCallback(params.verifyNotifyURL, { 
             money: newOrder.amount,
             orderId: savedOrder.orderId, 
             code_url: response.qrcode, 
             type: response.type,
             trade_no: response.trade_no
-          }
-        };
+          });
+        }
+        this.rabbitMQService.sendPaymentMessage("CREAT",savedOrder);
+        return { 
+          money: newOrder.amount,
+          orderId: savedOrder.orderId, 
+          code_url: response.qrcode, 
+          type: response.type,
+          trade_no: response.trade_no
+        }
       } else {
         return { code: RCode.ERROR, msg: '订单生成失败，但已经创建支付单', data: response };
       }
