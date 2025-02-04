@@ -3,6 +3,9 @@ import { KeyValue } from './key-value.entity';
 
 export class GetKeyValueDto {
   @Allow()
+  id?: number;
+
+  @Allow()
   pageSize?: number;
 
   @Allow()
