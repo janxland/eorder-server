@@ -9,10 +9,10 @@ export class KeyValueController {
   getAll(@Query()  queryDto: GetKeyValueDto){
     return this.keyValueService.findAll(queryDto);
   }
-
+  //只取一个
   @Get("/query")
-  Query(@Query()  queryDto: GetKeyValueDto){
-    return this.keyValueService.findAll(queryDto);
+  async Query(@Query()  queryDto: GetKeyValueDto){
+    return (await this.keyValueService.findAll(queryDto)).pageData[0];
   }
 
   @Post()
