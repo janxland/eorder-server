@@ -7,9 +7,14 @@ export class KeyValueController {
   constructor(private readonly keyValueService: KeyValueService) {}
   @Get()
   getAll(@Query()  queryDto: GetKeyValueDto){
-  return this.keyValueService.findAll(queryDto);
+    return this.keyValueService.findAll(queryDto);
   }
-  
+
+  @Get("/query")
+  Query(@Query()  queryDto: GetKeyValueDto){
+    return this.keyValueService.findAll(queryDto);
+  }
+
   @Post()
   async createOrUpdate(@Body() dto: CreateKeyValueDto | UpdateKeyValueDto) {
     return this.keyValueService.createOrUpdate(dto);
