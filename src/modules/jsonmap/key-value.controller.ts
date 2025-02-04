@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Query, Param } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Query, Param, Patch } from '@nestjs/common';
 import { KeyValueService } from './key-value.service';
 import { CreateKeyValueDto, GetKeyValueDto, UpdateKeyValueDto } from './dto';
 
@@ -9,11 +9,17 @@ export class KeyValueController {
   getAll(@Query()  queryDto: GetKeyValueDto){
   return this.keyValueService.findAll(queryDto);
   }
+  
   @Post()
   async createOrUpdate(@Body() dto: CreateKeyValueDto | UpdateKeyValueDto) {
     return this.keyValueService.createOrUpdate(dto);
   }
-
+  @Patch(':id')
+  async update(@Body() dto: CreateKeyValueDto | UpdateKeyValueDto) {
+    console.log(dto);
+    
+    return this.keyValueService.createOrUpdate(dto);
+  }
   @Delete(':id')
   async delete(@Param('id') id: string) {
     return this.keyValueService.delete(Number(id));
