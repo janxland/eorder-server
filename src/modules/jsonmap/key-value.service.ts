@@ -38,7 +38,9 @@ export class KeyValueService {
     const queryBuilder = this.keyValueRepository 
         .createQueryBuilder('keyValue')
         .where('1 = 1');
-
+    if (query.id) {
+      queryBuilder.andWhere('keyValue.id = :id', { id: query.id });
+    }
     // 根据Key筛选
     if (query.key)  {
         queryBuilder.andWhere('keyValue.key  LIKE :key', {
