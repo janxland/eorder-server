@@ -22,6 +22,7 @@ import { OrderModule } from './modules/order/order.module';
 import { ePayModule } from './modules/epay/epay.module';
 import { ProductsModule } from './modules/product/products.module';
 import { SystemModule } from './modules/system/system.module';
+import { KeyValueModule } from './modules/jsonmap/key-value.module';
 @Module({
   imports: [
     /* 配置文件模块 */
@@ -36,6 +37,7 @@ import { SystemModule } from './modules/system/system.module';
     AuthModule,
     SharedModule,
     
+    KeyValueModule,
     TeacherModule,
     SystemModule,
     AchievementTypeModule,
