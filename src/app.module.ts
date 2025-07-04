@@ -13,7 +13,7 @@ import { UserModule } from './modules/user/user.module';
 import { PermissionModule } from './modules/permission/permission.module';
 import { RoleModule } from './modules/role/role.module';
 import { AuthModule } from './modules/auth/auth.module';
-
+import { AuthCenterModule } from './modules/auth-center/auth-center.module';
 
 import { TeacherModule } from './modules/teachersay/teachers/teacher.module';
 import { AchievementTypeModule  } from './modules/teachersay/achievement-types/achievement-type.module';
@@ -23,6 +23,8 @@ import { ePayModule } from './modules/epay/epay.module';
 import { ProductsModule } from './modules/product/products.module';
 import { SystemModule } from './modules/system/system.module';
 import { KeyValueModule } from './modules/jsonmap/key-value.module';
+import { CloudStorageModule } from './modules/cloud-storage/cloud-storage.module';
+
 @Module({
   imports: [
     /* 配置文件模块 */
@@ -36,7 +38,7 @@ import { KeyValueModule } from './modules/jsonmap/key-value.module';
     RoleModule,
     AuthModule,
     SharedModule,
-    
+    AuthCenterModule,
     KeyValueModule,
     TeacherModule,
     SystemModule,
@@ -44,7 +46,8 @@ import { KeyValueModule } from './modules/jsonmap/key-value.module';
     AchievementModule,
     OrderModule,
     ePayModule,
-    ProductsModule
+    ProductsModule,
+    CloudStorageModule
   ],
 })
 export class AppModule {}
