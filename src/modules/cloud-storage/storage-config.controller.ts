@@ -1,88 +1,126 @@
-import { 
-  Body, 
-  Controller, 
-  Delete, 
-  Get, 
-  Param, 
-  ParseIntPipe, 
-  Post, 
-  Put, 
-  Query,
-  UseGuards 
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards, Req } from '@nestjs/common';
 import { StorageConfigService } from './storage-config.service';
+import { CloudStorageService } from './cloud-storage.service';
 import { CreateStorageConfigDto, TestStorageConfigDto, UpdateStorageConfigDto } from './dto/storage-config.dto';
-import { StorageConfig, StorageProviderType } from './entities/storage-config.entity';
-import { JwtGuard } from '@/common/guards';
-import { Roles } from '@/common/decorators/roles.decorator';
+import { StorageConfig } from './entities/storage-config.entity';
+import { AuthCenterGuard } from '../../common/guards/auth-center.guard';
 
 @Controller('cloud-storage/config')
-@UseGuards(JwtGuard)
+@UseGuards(AuthCenterGuard)
 export class StorageConfigController {
-  constructor(private readonly storageConfigService: StorageConfigService) {}
+  constructor(
+    private readonly storageConfigService: StorageConfigService,
+    private readonly cloudStorageService: CloudStorageService,
+  ) {}
 
   /**
-   * 创建云存储配置
-   */
-  @Post()
-  @Roles('admin')
-  async create(@Body() createDto: CreateStorageConfigDto): Promise<StorageConfig> {
-    return this.storageConfigService.create(createDto);
-  }
-
-  /**
-   * 获取所有云存储配置
+   * 获取所有存储配置
    */
   @Get()
-  @Roles('admin')
-  async findAll(): Promise<StorageConfig[]> {
-    return this.storageConfigService.findAll();
+  async findAll(@Req() req: any): Promise<{ success: boolean; data: StorageConfig[] }> {
+    const userId = req.user?.userId;
+    const configs = await this.storageConfigService.findAll(userId);
+    return {
+      success: true,
+      data: configs,
+    };
   }
 
   /**
-   * 根据ID获取云存储配置
+   * 获取单个存储配置
    */
   @Get(':id')
-  @Roles('admin')
-  async findOne(@Param('id', ParseIntPipe) id: number): Promise<StorageConfig> {
-    return this.storageConfigService.findOne(id);
+  async findOne(@Param('id') id: number, @Req() req: any): Promise<{ success: boolean; data: StorageConfig }> {
+    const userId = req.user?.userId;
+    const config = await this.storageConfigService.findById(+id, userId);
+    return {
+      success: true,
+      data: config,
+    };
   }
 
   /**
-   * 获取指定类型的所有可用配置
+   * 创建存储配置
    */
-  @Get('by-type/:provider')
-  async findAllByType(@Param('provider') provider: StorageProviderType): Promise<StorageConfig[]> {
-    return this.storageConfigService.findAllByType(provider);
+  @Post()
+  async create(@Body() createDto: CreateStorageConfigDto, @Req() req: any): Promise<{ success: boolean; data: StorageConfig }> {
+    const userId = req.user?.userId;
+    const config = await this.storageConfigService.create(createDto, userId);
+    return {
+      success: true,
+      data: config,
+    };
   }
 
   /**
-   * 更新云存储配置
+   * 更新存储配置
    */
   @Put(':id')
-  @Roles('admin')
   async update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: number,
     @Body() updateDto: UpdateStorageConfigDto,
-  ): Promise<StorageConfig> {
-    return this.storageConfigService.update(id, updateDto);
+    @Req() req: any
+  ): Promise<{ success: boolean; data: StorageConfig }> {
+    const userId = req.user?.userId;
+    const config = await this.storageConfigService.update(+id, updateDto, userId);
+    return {
+      success: true,
+      data: config,
+    };
   }
 
   /**
-   * 删除云存储配置
+   * 删除存储配置
    */
   @Delete(':id')
-  @Roles('admin')
-  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
-    return this.storageConfigService.remove(id);
+  async remove(@Param('id') id: number, @Req() req: any): Promise<{ success: boolean }> {
+    const userId = req.user?.userId;
+    const result = await this.storageConfigService.remove(+id, userId);
+    return {
+      success: result,
+    };
   }
 
   /**
-   * 测试云存储配置连接
+   * 设置默认配置
+   */
+  @Put(':id/default')
+  async setDefault(@Param('id') id: number, @Req() req: any): Promise<{ success: boolean; data: StorageConfig }> {
+    const userId = req.user?.userId;
+    const config = await this.storageConfigService.setDefault(+id, userId);
+    return {
+      success: true,
+      data: config,
+    };
+  }
+
+  /**
+   * 更改配置启用状态
+   */
+  @Put(':id/status')
+  async changeStatus(
+    @Param('id') id: number,
+    @Body('isEnabled') isEnabled: boolean,
+    @Req() req: any
+  ): Promise<{ success: boolean; data: StorageConfig }> {
+    const userId = req.user?.userId;
+    const config = await this.storageConfigService.changeStatus(+id, isEnabled, userId);
+    return {
+      success: true,
+      data: config,
+    };
+  }
+
+  /**
+   * 测试连接
    */
   @Post('test-connection')
-  @Roles('admin')
-  async testConnection(@Body() testDto: TestStorageConfigDto): Promise<{ success: boolean; message: string }> {
-    return this.storageConfigService.testConnection(testDto);
+  async testConnection(@Body() testDto: TestStorageConfigDto, @Req() req: any): Promise<{ success: boolean; data: { success: boolean; message: string } }> {
+    const userId = req.user?.userId;
+    const result = await this.storageConfigService.testConnection(testDto, userId);
+    return {
+      success: true,
+      data: result,
+    };
   }
 } 
