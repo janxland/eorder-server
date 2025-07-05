@@ -36,7 +36,7 @@ export class AuthCenterController {
     
     return {
       success: true,
-      data: result
+      ...result
     };
   }
 
@@ -49,7 +49,7 @@ export class AuthCenterController {
     const result = await this.authCenterService.refreshToken(refreshTokenDto.refreshToken, req);
     return {
       success: true,
-      data: result
+      ...result
     };
   }
 
@@ -77,7 +77,7 @@ export class AuthCenterController {
     const profile = await this.authCenterService.getUserProfile(userId);
     return {
       success: true,
-      data: profile
+      ...profile
     };
   }
 
@@ -89,7 +89,7 @@ export class AuthCenterController {
     const result = await this.authCenterService.verifyToken(body.token);
     return {
       success: true,
-      data: result
+      ...result
     };
   }
 
@@ -118,7 +118,7 @@ export class AuthCenterController {
     
     return {
       success: true,
-      data: { hasAdmin }
+      hasAdmin
     };
   }
 
@@ -134,7 +134,7 @@ export class AuthCenterController {
     
     return {
       success: true,
-      data: result
+      ...result
     };
   }
 }

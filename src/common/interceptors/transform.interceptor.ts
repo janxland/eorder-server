@@ -34,7 +34,7 @@ export class TransformInterceptor implements NestInterceptor {
               code: 200,
               message: 'OK',
               originUrl: req.originalUrl,
-              ...data,
+              data,
             };
         }
       }),
