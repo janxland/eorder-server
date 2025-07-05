@@ -85,7 +85,7 @@ export class CloudStorageController {
     
     return {
       success: true,
-      data: credentials,
+      ...credentials,
     };
   }
 
@@ -103,7 +103,7 @@ export class CloudStorageController {
     const url = await this.cloudStorageService.getFileUrl(key, configId ? +configId : undefined, userId);
     return {
       success: true,
-      data: url,
+      url,
     };
   }
 

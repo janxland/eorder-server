@@ -17,39 +17,30 @@ export class StorageConfigController {
    * 获取所有存储配置
    */
   @Get()
-  async findAll(@Req() req: any): Promise<{ success: boolean; data: StorageConfig[] }> {
+  async findAll(@Req() req: any): Promise<{ }> {
     const userId = req.user?.userId;
     const configs = await this.storageConfigService.findAll(userId);
-    return {
-      success: true,
-      data: configs,
-    };
+    return configs;
   }
 
   /**
    * 获取单个存储配置
    */
   @Get(':id')
-  async findOne(@Param('id') id: number, @Req() req: any): Promise<{ success: boolean; data: StorageConfig }> {
+  async findOne(@Param('id') id: number, @Req() req: any): Promise<{ }> {
     const userId = req.user?.userId;
     const config = await this.storageConfigService.findById(+id, userId);
-    return {
-      success: true,
-      data: config,
-    };
+    return config;
   }
 
   /**
    * 创建存储配置
    */
   @Post()
-  async create(@Body() createDto: CreateStorageConfigDto, @Req() req: any): Promise<{ success: boolean; data: StorageConfig }> {
+  async create(@Body() createDto: CreateStorageConfigDto, @Req() req: any): Promise<{ }> {
     const userId = req.user?.userId;
     const config = await this.storageConfigService.create(createDto, userId);
-    return {
-      success: true,
-      data: config,
-    };
+    return config;
   }
 
   /**
@@ -60,13 +51,10 @@ export class StorageConfigController {
     @Param('id') id: number,
     @Body() updateDto: UpdateStorageConfigDto,
     @Req() req: any
-  ): Promise<{ success: boolean; data: StorageConfig }> {
+  ): Promise<{}> {
     const userId = req.user?.userId;
     const config = await this.storageConfigService.update(+id, updateDto, userId);
-    return {
-      success: true,
-      data: config,
-    };
+    return config;
   }
 
   /**
@@ -85,13 +73,10 @@ export class StorageConfigController {
    * 设置默认配置
    */
   @Put(':id/default')
-  async setDefault(@Param('id') id: number, @Req() req: any): Promise<{ success: boolean; data: StorageConfig }> {
+  async setDefault(@Param('id') id: number, @Req() req: any): Promise<{ }> {
     const userId = req.user?.userId;
     const config = await this.storageConfigService.setDefault(+id, userId);
-    return {
-      success: true,
-      data: config,
-    };
+    return config;
   }
 
   /**
@@ -102,25 +87,22 @@ export class StorageConfigController {
     @Param('id') id: number,
     @Body('isEnabled') isEnabled: boolean,
     @Req() req: any
-  ): Promise<{ success: boolean; data: StorageConfig }> {
+  ): Promise<{ }> {
     const userId = req.user?.userId;
     const config = await this.storageConfigService.changeStatus(+id, isEnabled, userId);
-    return {
-      success: true,
-      data: config,
-    };
+    return config;
   }
 
   /**
    * 测试连接
    */
   @Post('test-connection')
-  async testConnection(@Body() testDto: TestStorageConfigDto, @Req() req: any): Promise<{ success: boolean; data: { success: boolean; message: string } }> {
+  async testConnection(@Body() testDto: TestStorageConfigDto, @Req() req: any): Promise<{  }> {
     const userId = req.user?.userId;
     const result = await this.storageConfigService.testConnection(testDto, userId);
     return {
       success: true,
-      data: result,
+      ...result,
     };
   }
 } 
