@@ -1,5 +1,5 @@
 import { IsBoolean, IsEnum, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
-import { StorageProviderType } from '../entities/storage-config.entity';
+import { StorageType } from '../entities/storage-config.entity';
 
 /**
  * 创建云存储配置DTO
@@ -7,42 +7,52 @@ import { StorageProviderType } from '../entities/storage-config.entity';
 export class CreateStorageConfigDto {
   @IsNotEmpty({ message: '配置名称不能为空' })
   @IsString()
-  @MaxLength(50, { message: '配置名称长度不能超过50个字符' })
+  @MaxLength(100)
   name: string;
 
-  @IsNotEmpty({ message: '存储提供商类型不能为空' })
-  @IsEnum(StorageProviderType, { message: '无效的存储提供商类型' })
-  provider: StorageProviderType;
+  @IsNotEmpty({ message: '存储类型不能为空' })
+  @IsEnum(StorageType)
+  type: StorageType;
 
-  @IsNotEmpty({ message: '访问密钥ID不能为空' })
+  @IsNotEmpty({ message: '区域不能为空' })
   @IsString()
-  @MaxLength(100, { message: '访问密钥ID长度不能超过100个字符' })
-  accessKeyId: string;
-
-  @IsNotEmpty({ message: '访问密钥Secret不能为空' })
-  @IsString()
-  @MaxLength(100, { message: '访问密钥Secret长度不能超过100个字符' })
-  accessKeySecret: string;
+  @MaxLength(255)
+  region: string;
 
   @IsNotEmpty({ message: '存储桶名称不能为空' })
   @IsString()
-  @MaxLength(100, { message: '存储桶名称长度不能超过100个字符' })
+  @MaxLength(255)
   bucket: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(255, { message: '区域/地域长度不能超过255个字符' })
-  region?: string;
+  @MaxLength(255)
+  prefix?: string;
+
+  @IsNotEmpty({ message: 'AccessKey不能为空' })
+  @IsString()
+  @MaxLength(255)
+  accessKey: string;
+
+  @IsNotEmpty({ message: 'SecretKey不能为空' })
+  @IsString()
+  @MaxLength(255)
+  secretKey: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(255, { message: '自定义域名长度不能超过255个字符' })
+  @MaxLength(255)
+  endpoint?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
   domain?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(255, { message: '存储桶访问路径长度不能超过255个字符' })
-  endpoint?: string;
+  @MaxLength(255)
+  cdnDomain?: string;
 
   @IsOptional()
   @IsBoolean()
@@ -53,13 +63,12 @@ export class CreateStorageConfigDto {
   isEnabled?: boolean;
 
   @IsOptional()
-  @IsObject()
-  extraConfig?: Record<string, any>;
+  @IsBoolean()
+  isPrivate?: boolean;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(255, { message: '备注长度不能超过255个字符' })
-  remark?: string;
+  @IsObject()
+  extraConfig?: Record<string, any>;
 }
 
 /**
@@ -68,42 +77,48 @@ export class CreateStorageConfigDto {
 export class UpdateStorageConfigDto {
   @IsOptional()
   @IsString()
-  @MaxLength(50, { message: '配置名称长度不能超过50个字符' })
+  @MaxLength(100)
   name?: string;
 
   @IsOptional()
-  @IsEnum(StorageProviderType, { message: '无效的存储提供商类型' })
-  provider?: StorageProviderType;
-
-  @IsOptional()
   @IsString()
-  @MaxLength(100, { message: '访问密钥ID长度不能超过100个字符' })
-  accessKeyId?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100, { message: '访问密钥Secret长度不能超过100个字符' })
-  accessKeySecret?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100, { message: '存储桶名称长度不能超过100个字符' })
-  bucket?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(255, { message: '区域/地域长度不能超过255个字符' })
+  @MaxLength(255)
   region?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(255, { message: '自定义域名长度不能超过255个字符' })
+  @MaxLength(255)
+  bucket?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  prefix?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  accessKey?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  secretKey?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  endpoint?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
   domain?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(255, { message: '存储桶访问路径长度不能超过255个字符' })
-  endpoint?: string;
+  @MaxLength(255)
+  cdnDomain?: string;
 
   @IsOptional()
   @IsBoolean()
@@ -114,16 +129,29 @@ export class UpdateStorageConfigDto {
   isEnabled?: boolean;
 
   @IsOptional()
-  @IsObject()
-  extraConfig?: Record<string, any>;
+  @IsBoolean()
+  isPrivate?: boolean;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(255, { message: '备注长度不能超过255个字符' })
-  remark?: string;
+  @IsObject()
+  extraConfig?: Record<string, any>;
 }
 
 /**
  * 测试云存储配置连接DTO
  */
 export class TestStorageConfigDto extends CreateStorageConfigDto {} 
+
+export class UploadDto {
+  @IsNotEmpty({ message: '文件路径不能为空' })
+  @IsString()
+  key: string;
+
+  @IsOptional()
+  @IsString()
+  configId?: number;
+  
+  @IsOptional()
+  @IsString()
+  configName?: string;
+} 
