@@ -55,4 +55,48 @@ export interface ICloudStorageProvider {
    * 删除文件
    */
   deleteFile(key: string): Promise<boolean>;
+
+  /**
+   * 生成临时密钥
+   */
+  generateTempCredentials?(prefix?: string, expires?: number): Promise<any>;
+} 
+
+export interface CloudStorageInterface {
+  /**
+   * 初始化
+   */
+  initialize(config: any): void;
+  
+  /**
+   * 测试连接
+   */
+  testConnection(): Promise<boolean>;
+  
+  /**
+   * 获取上传凭证
+   */
+  getUploadToken(key?: string, expires?: number): Promise<string>;
+
+  /**
+   * 获取上传URL
+   */
+  getUploadUrl(key: string, expires?: number): Promise<string>;
+
+  /**
+   * 获取文件访问URL
+   */
+  getFileUrl(key: string, expires?: number): Promise<string>;
+
+  /**
+   * 删除文件
+   */
+  deleteFile(key: string): Promise<boolean>;
+
+  /**
+   * 生成临时密钥
+   * @param prefix 文件路径前缀
+   * @param expires 过期时间（秒）
+   */
+  generateTempCredentials(prefix?: string, expires?: number): Promise<any>;
 } 

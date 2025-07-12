@@ -1,13 +1,13 @@
 import { IsEnum, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
-import { StorageProviderType } from '../entities/storage-config.entity';
+import { StorageType } from '../entities/storage-config.entity';
 
 /**
  * 获取上传凭证DTO
  */
 export class GetUploadTokenDto {
-  @IsNotEmpty({ message: '存储提供商类型不能为空' })
-  @IsEnum(StorageProviderType, { message: '无效的存储提供商类型' })
-  provider: StorageProviderType;
+  @IsNotEmpty({ message: '存储类型不能为空' })
+  @IsEnum(StorageType)
+  provider: StorageType;
 
   @IsOptional()
   @IsString()
@@ -26,11 +26,11 @@ export class GetUploadTokenDto {
  * 获取上传URL DTO
  */
 export class GetUploadUrlDto {
-  @IsNotEmpty({ message: '存储提供商类型不能为空' })
-  @IsEnum(StorageProviderType, { message: '无效的存储提供商类型' })
-  provider: StorageProviderType;
+  @IsNotEmpty({ message: '存储类型不能为空' })
+  @IsEnum(StorageType)
+  provider: StorageType;
 
-  @IsNotEmpty({ message: '文件键值不能为空' })
+  @IsNotEmpty({ message: '文件路径不能为空' })
   @IsString()
   key: string;
 
@@ -47,11 +47,11 @@ export class GetUploadUrlDto {
  * 获取文件URL DTO
  */
 export class GetFileUrlDto {
-  @IsNotEmpty({ message: '存储提供商类型不能为空' })
-  @IsEnum(StorageProviderType, { message: '无效的存储提供商类型' })
-  provider: StorageProviderType;
+  @IsNotEmpty({ message: '存储类型不能为空' })
+  @IsEnum(StorageType)
+  provider: StorageType;
 
-  @IsNotEmpty({ message: '文件键值不能为空' })
+  @IsNotEmpty({ message: '文件路径不能为空' })
   @IsString()
   key: string;
 
@@ -81,11 +81,11 @@ export class FileMetadataDto {
  * 删除文件DTO
  */
 export class DeleteFileDto {
-  @IsNotEmpty({ message: '存储提供商类型不能为空' })
-  @IsEnum(StorageProviderType, { message: '无效的存储提供商类型' })
-  provider: StorageProviderType;
+  @IsNotEmpty({ message: '存储类型不能为空' })
+  @IsEnum(StorageType)
+  provider: StorageType;
 
-  @IsNotEmpty({ message: '文件键值不能为空' })
+  @IsNotEmpty({ message: '文件路径不能为空' })
   @IsString()
   key: string;
   

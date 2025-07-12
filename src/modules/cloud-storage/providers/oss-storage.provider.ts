@@ -1,254 +1,139 @@
-import { CloudStorageConfig, ICloudStorageProvider, UploadOptions } from './cloud-storage.interface';
+import { Injectable, Logger } from '@nestjs/common';
+import * as OSS from 'ali-oss';
+import { CloudStorageInterface } from './cloud-storage.interface';
+import { StorageConfig } from '../entities/storage-config.entity';
 
-/**
- * 阿里云OSS存储提供商
- */
-export class OssStorageProvider implements ICloudStorageProvider {
-  private config: CloudStorageConfig;
+@Injectable()
+export class OssStorageProvider implements CloudStorageInterface {
+  private client: OSS;
+  private config: StorageConfig;
+  private readonly logger = new Logger(OssStorageProvider.name);
   
-  constructor(config: CloudStorageConfig) {
-    this.config = config;
-    
-    // 确保必要的配置项存在
-    if (!config.endpoint && !config.region) {
-      throw new Error('阿里云OSS配置缺少endpoint或region参数');
-    }
-  }
+  constructor() {}
 
   /**
-   * 测试连接
-   * 注意: 实际实现时需要引入阿里云OSS SDK并进行实际测试
+   * 初始化OSS客户端
+   * @param config 存储配置
    */
-  async testConnection(): Promise<boolean> {
-    try {
-      // 这里应该使用阿里云OSS SDK进行实际连接测试
-      // 例如获取存储空间列表或者尝试获取一个文件
-      
-      /*
-      const OSS = require('ali-oss');
-      const client = new OSS({
-        accessKeyId: this.config.accessKeyId,
-        accessKeySecret: this.config.accessKeySecret,
-        bucket: this.config.bucket,
-        endpoint: this.getEndpoint(),
-      });
-      
-      // 尝试获取存储桶信息
-      await client.getBucketInfo(this.config.bucket);
-      return true;
-      */
-      
-      // 模拟返回
-      return true;
-    } catch (error) {
-      throw new Error(`阿里云OSS连接测试失败: ${error.message}`);
-    }
+  initialize(config: StorageConfig): void {
+    this.config = config;
+    this.client = new OSS({
+      accessKeyId: config.accessKey,
+      accessKeySecret: config.secretKey,
+      bucket: config.bucket,
+      region: config.region,
+      endpoint: config.endpoint,
+    });
   }
 
   /**
    * 获取上传凭证
-   * 阿里云OSS使用STS临时凭证或签名URL
+   * @param key 文件路径
+   * @param expires 过期时间（秒）
    */
-  async getUploadToken(key?: string, expires: number = 3600): Promise<string> {
+  async getUploadToken(key: string, expires = 3600): Promise<any> {
+    const prefix = this.config.prefix ? `${this.config.prefix}/` : '';
+    const fullKey = `${prefix}${key}`;
+
     try {
-      // 阿里云OSS使用STS临时凭证
-      // 这里应该调用STS服务获取临时凭证
-      /*
-      const STS = require('ali-oss').STS;
-      const sts = new STS({
-        accessKeyId: this.config.accessKeyId,
-        accessKeySecret: this.config.accessKeySecret,
+      // 阿里云OSS使用签名URL进行上传
+      const url = this.client.signatureUrl(fullKey, {
+        method: 'PUT',
+        expires,
       });
-      
-      const policy = {
-        Statement: [
-          {
-            Action: ['oss:PutObject'],
-            Effect: 'Allow',
-            Resource: [`acs:oss:*:*:${this.config.bucket}/${key || '*'}`],
-          },
-        ],
-        Version: '1',
+
+      return {
+        url,
       };
-      
-      const result = await sts.assumeRole(
-        this.config.extraConfig?.roleArn || '', 
-        policy, 
-        expires
-      );
-      
-      return JSON.stringify(result.credentials);
-      */
-      
-      // 模拟返回
-      return JSON.stringify({
-        AccessKeyId: 'temp-access-key-id',
-        AccessKeySecret: 'temp-access-key-secret',
-        SecurityToken: 'temp-security-token',
-        Expiration: new Date(Date.now() + expires * 1000).toISOString(),
-      });
     } catch (error) {
-      throw new Error(`获取阿里云OSS临时凭证失败: ${error.message}`);
+      throw new Error(`获取OSS上传凭证失败: ${error.message}`);
     }
   }
 
   /**
-   * 获取临时上传URL
+   * 获取上传URL
+   * @param key 文件路径
+   * @param expires 过期时间（秒）
    */
-  async getUploadUrl(key: string, expires: number = 3600): Promise<string> {
+  async getUploadUrl(key: string, expires = 3600): Promise<string> {
+    const prefix = this.config.prefix ? `${this.config.prefix}/` : '';
+    const fullKey = `${prefix}${key}`;
+
     try {
-      // 这里应该使用阿里云OSS SDK生成预签名URL
-      /*
-      const OSS = require('ali-oss');
-      const client = new OSS({
-        accessKeyId: this.config.accessKeyId,
-        accessKeySecret: this.config.accessKeySecret,
-        bucket: this.config.bucket,
-        endpoint: this.getEndpoint(),
-      });
-      
-      const url = client.signatureUrl(key, {
+      return this.client.signatureUrl(fullKey, {
         method: 'PUT',
         expires,
       });
-      
-      return url;
-      */
-      
-      // 模拟返回
-      const endpoint = this.getEndpoint();
-      return `https://${this.config.bucket}.${endpoint}/${key}?OSSAccessKeyId=xxx&Expires=${Math.floor(Date.now() / 1000) + expires}&Signature=oss-signature-placeholder`;
     } catch (error) {
-      throw new Error(`获取阿里云OSS上传URL失败: ${error.message}`);
+      throw new Error(`获取OSS上传URL失败: ${error.message}`);
     }
   }
 
   /**
    * 获取文件访问URL
+   * @param key 文件路径
+   * @param expires 过期时间（秒），私有读取时需要
    */
-  async getFileUrl(key: string, expires?: number): Promise<string> {
-    try {
-      // 如果有自定义域名，直接拼接
-      if (this.config.domain) {
-        const url = `${this.config.domain}/${key}`;
-        
-        // 如果需要私有访问，则应该生成带签名的URL
-        if (expires) {
-          // 这里应该使用阿里云OSS SDK生成带签名的URL
-          /*
-          const OSS = require('ali-oss');
-          const client = new OSS({
-            accessKeyId: this.config.accessKeyId,
-            accessKeySecret: this.config.accessKeySecret,
-            bucket: this.config.bucket,
-            endpoint: this.getEndpoint(),
-          });
-          
-          const url = client.signatureUrl(key, {
-            expires,
-          });
-          
-          return url;
-          */
-          
-          // 模拟返回
-          return `${url}?OSSAccessKeyId=xxx&Expires=${Math.floor(Date.now() / 1000) + expires}&Signature=oss-signature-placeholder`;
-        }
-        
-        return url;
-      }
-      
-      // 如果没有自定义域名，使用默认域名
-      const endpoint = this.getEndpoint();
-      const urlBase = `https://${this.config.bucket}.${endpoint}/${key}`;
-      
-      if (expires) {
-        return `${urlBase}?OSSAccessKeyId=xxx&Expires=${Math.floor(Date.now() / 1000) + expires}&Signature=oss-signature-placeholder`;
-      }
-      
-      return urlBase;
-    } catch (error) {
-      throw new Error(`获取阿里云OSS文件URL失败: ${error.message}`);
-    }
-  }
+  async getFileUrl(key: string, expires = 3600): Promise<string> {
+    const prefix = this.config.prefix ? `${this.config.prefix}/` : '';
+    const fullKey = `${prefix}${key}`;
 
-  /**
-   * 上传文件
-   */
-  async uploadFile(fileBuffer: Buffer, key: string, options?: UploadOptions): Promise<string> {
+    // 如果配置了自定义域名且不是私有读取，则直接返回URL
+    if (this.config.domain && !this.config.isPrivate) {
+      return `${this.config.domain}/${fullKey}`;
+      }
+      
     try {
-      // 这里应该使用阿里云OSS SDK上传文件
-      /*
-      const OSS = require('ali-oss');
-      const client = new OSS({
-        accessKeyId: this.config.accessKeyId,
-        accessKeySecret: this.config.accessKeySecret,
-        bucket: this.config.bucket,
-        endpoint: this.getEndpoint(),
+      return this.client.signatureUrl(fullKey, {
+        expires: this.config.isPrivate ? expires : undefined,
       });
-      
-      const headers: any = {};
-      
-      if (options?.mimeType) {
-        headers['Content-Type'] = options.mimeType;
-      }
-      
-      if (options?.metadata) {
-        Object.keys(options.metadata).forEach(metaKey => {
-          headers[`x-oss-meta-${metaKey}`] = options.metadata[metaKey];
-        });
-      }
-      
-      const result = await client.put(key, fileBuffer, {
-        headers,
-        timeout: options?.timeout || 60000,
-      });
-      
-      return result.url || this.getFileUrl(key);
-      */
-      
-      // 模拟返回
-      return this.getFileUrl(key);
     } catch (error) {
-      throw new Error(`阿里云OSS上传文件失败: ${error.message}`);
+      throw new Error(`获取OSS文件URL失败: ${error.message}`);
     }
   }
 
   /**
    * 删除文件
+   * @param key 文件路径
    */
   async deleteFile(key: string): Promise<boolean> {
+    const prefix = this.config.prefix ? `${this.config.prefix}/` : '';
+    const fullKey = `${prefix}${key}`;
+
     try {
-      // 这里应该使用阿里云OSS SDK删除文件
-      /*
-      const OSS = require('ali-oss');
-      const client = new OSS({
-        accessKeyId: this.config.accessKeyId,
-        accessKeySecret: this.config.accessKeySecret,
-        bucket: this.config.bucket,
-        endpoint: this.getEndpoint(),
-      });
-      
-      await client.delete(key);
-      return true;
-      */
-      
-      // 模拟返回
+      await this.client.delete(fullKey);
       return true;
     } catch (error) {
-      throw new Error(`阿里云OSS删除文件失败: ${error.message}`);
+      throw new Error(`删除OSS文件失败: ${error.message}`);
     }
   }
   
   /**
-   * 获取OSS的endpoint
-   * 优先使用配置中的endpoint，如果没有则根据region构造
+   * 测试连接
    */
-  private getEndpoint(): string {
-    if (this.config.endpoint) {
-      return this.config.endpoint.replace(/^https?:\/\//, '');
+  async testConnection(): Promise<boolean> {
+    try {
+      // 尝试列出Bucket下的文件，只获取一个
+      await this.client.list({
+        'max-keys': 1,
+      });
+      return true;
+    } catch (error) {
+      console.error('OSS连接测试失败:', error);
+      return false;
     }
+  }
+
+  /**
+   * 生成临时密钥
+   * @param prefix 文件路径前缀
+   * @param expires 过期时间（秒）
+   */
+  async generateTempCredentials(prefix?: string, expires = 1800): Promise<any> {
+    this.logger.debug(`生成临时密钥: prefix=${prefix}, expires=${expires}`);
     
-    return `oss-${this.config.region}.aliyuncs.com`;
+    // 阿里云OSS临时密钥实现
+    // 目前仅返回一个占位符实现，实际项目中需要使用阿里云STS服务
+    throw new Error('阿里云OSS临时密钥功能尚未实现');
   }
 } 
