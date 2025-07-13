@@ -16,7 +16,7 @@ import * as bcrypt from 'bcryptjs';
 @Injectable()
 export class AuthCenterService {
   // Access Token过期时间（3小时）
-  private readonly ACCESS_TOKEN_EXPIRATION = 3 * 60 * 60;
+  private readonly ACCESS_TOKEN_EXPIRATION = 60 * 60;
   // Refresh Token过期时间（3个月）
   private readonly REFRESH_TOKEN_EXPIRATION = 90 * 24 * 60 * 60;
 
@@ -26,7 +26,6 @@ export class AuthCenterService {
     private jwtService: JwtService,
     private userService: UserService,
     private redisService: RedisService,
-    private configService: ConfigService,
     @InjectRepository(RefreshToken)
     private refreshTokenRepository: Repository<RefreshToken>,
     @InjectRepository(User)
@@ -169,19 +168,41 @@ export class AuthCenterService {
     const roleCodes = user.roles?.map((item) => item.code);
     const currentRole = user.roles.find(role => role.enable) || user.roles[0];
 
-    // 生成新的Token对
-    const tokens = await this.generateTokens({
+    // 生成新的Access Token，但保留原有的Refresh Token
+    const accessToken = this.jwtService.sign({
       userId: user.id,
       username: user.username,
       roleCodes,
       currentRoleCode: currentRole.code,
-    }, req);
+    }, {
+      expiresIn: this.ACCESS_TOKEN_EXPIRATION,
+    });
 
-    // 撤销旧的Refresh Token
-    refreshTokenEntity.isRevoked = true;
-    await this.refreshTokenRepository.save(refreshTokenEntity);
+    // 将Access Token保存到Redis，便于快速验证和撤销
+    const tokenKey = `auth:access_token:${user.id}`;
+    await this.redisService.set(
+      tokenKey,
+      accessToken,
+      this.ACCESS_TOKEN_EXPIRATION,
+    );
 
-    return tokens;
+    // 更新最后活跃时间
+    await this.redisService.set(
+      `auth:last_active:${user.id}`,
+      new Date().toISOString(),
+      this.REFRESH_TOKEN_EXPIRATION,
+    );
+
+    // 返回新的Access Token和原有的Refresh Token
+    return {
+      accessToken,
+      refreshToken: refreshTokenString, // 返回原有的Refresh Token
+      expiresIn: this.ACCESS_TOKEN_EXPIRATION,
+      tokenType: 'Bearer',
+      userId: user.id,
+      username: user.username,
+      roles: roleCodes,
+    };
   }
 
   /**
