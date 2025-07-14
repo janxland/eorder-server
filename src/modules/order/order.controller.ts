@@ -4,13 +4,17 @@ import {
   Get,
   Body,
   Query,
-  Req
+  Req,
+  UseGuards
 } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { Order } from './order.entity';
+import { AuthCenterGuard } from '@/common/guards/auth-center.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
+
 const allowedIps = ['YOUR_ALLOWED_IPS']; // 配置允许的IP列表
 @Controller('orderss')
-// @UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthCenterGuard)
 export class OrderController {
   constructor(private readonly orderService: OrderService) {
       console.log('OrderController instantiated');

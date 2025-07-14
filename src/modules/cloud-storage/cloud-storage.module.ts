@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CloudStorageService } from './cloud-storage.service';
 import { CloudStorageController } from './cloud-storage.controller';
@@ -14,7 +14,7 @@ import { AuthCenterModule } from '../auth-center/auth-center.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([StorageConfig]),
-    AuthCenterModule,
+    forwardRef(() => AuthCenterModule),
   ],
   controllers: [CloudStorageController, StorageConfigController],
   providers: [

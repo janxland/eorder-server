@@ -8,12 +8,13 @@
 
 import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { JwtGuard, LocalGuard, PreviewGuard } from '@/common/guards';
+import { LocalGuard, PreviewGuard } from '@/common/guards';
 import { ChangePasswordDto, RegisterUserDto } from './dto';
 import { UserService } from '@/modules/user/user.service';
 import * as svgCaptcha from 'svg-captcha';
 import { CustomException, ErrorCode } from '@/common/exceptions/custom.exception';
 import { ConfigService } from '@nestjs/config';
+import { AuthCenterGuard } from '@/common/guards/auth-center.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -47,19 +48,19 @@ export class AuthController {
   }
 
   @Get('refresh/token')
-  @UseGuards(JwtGuard)
+  @UseGuards(AuthCenterGuard)
   async refreshToken(@Req() req: any) {
     return this.authService.generateToken(req.user);
   }
 
   @Post('current-role/switch/:roleCode')
-  @UseGuards(JwtGuard)
+  @UseGuards(AuthCenterGuard)
   async switchCurrentRole(@Req() req: any, @Param('roleCode') roleCode: string) {
     return this.authService.switchCurrentRole(req.user, roleCode);
   }
 
   @Post('logout')
-  @UseGuards(JwtGuard)
+  @UseGuards(AuthCenterGuard)
   async logout(@Req() req: any) {
     return this.authService.logout(req.user);
   }
@@ -80,7 +81,7 @@ export class AuthController {
   }
 
   @Post('password')
-  @UseGuards(JwtGuard, PreviewGuard)
+  @UseGuards(AuthCenterGuard, PreviewGuard)
   async changePassword(@Req() req: any, @Body() body: ChangePasswordDto) {
     const ret = await this.authService.validateUser(req.user.username, body.oldPassword);
     if (!ret) {
