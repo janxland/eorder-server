@@ -12,7 +12,6 @@ import { ConfigModule } from '@nestjs/config';
 import { UserModule } from './modules/user/user.module';
 import { PermissionModule } from './modules/permission/permission.module';
 import { RoleModule } from './modules/role/role.module';
-import { AuthModule } from './modules/auth/auth.module';
 import { AuthCenterModule } from './modules/auth-center/auth-center.module';
 
 import { TeacherModule } from './modules/teachersay/teachers/teacher.module';
@@ -37,7 +36,6 @@ import { AIModelModule } from './modules/ai-model/ai-model.module';
     UserModule,
     PermissionModule,
     RoleModule,
-    AuthModule,
     SharedModule,
     AuthCenterModule,
     KeyValueModule,
