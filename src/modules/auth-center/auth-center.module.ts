@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -12,7 +12,7 @@ import { Role } from '../role/role.entity';
 
 @Module({
   imports: [
-    UserModule,
+    forwardRef(() => UserModule),
     SharedModule,
     TypeOrmModule.forFeature([RefreshToken, User, Role]),
     JwtModule.registerAsync({

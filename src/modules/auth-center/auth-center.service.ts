@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
@@ -24,6 +24,7 @@ export class AuthCenterService {
 
   constructor(
     private jwtService: JwtService,
+    @Inject(forwardRef(() => UserService))
     private userService: UserService,
     private redisService: RedisService,
     @InjectRepository(RefreshToken)

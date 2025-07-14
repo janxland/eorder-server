@@ -1,4 +1,4 @@
-import { Module, OnModuleInit } from '@nestjs/common';
+import { forwardRef, Module, OnModuleInit } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AIModelConfig } from './entities/ai-model-config.entity';
 import { AppConfig } from './entities/app-config.entity';
@@ -9,10 +9,12 @@ import { AppConfigService } from './app-config.service';
 import { ModuleRef } from '@nestjs/core';
 import { AIModelType } from './entities/ai-model-config.entity';
 import { AppType } from './entities/app-config.entity';
+import { AuthCenterModule } from '@/modules/auth-center/auth-center.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([AIModelConfig, AppConfig]),
+    forwardRef(() => AuthCenterModule),
   ],
   controllers: [AIModelConfigController, AppConfigController],
   providers: [AIModelConfigService, AppConfigService],

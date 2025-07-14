@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards, Logger, UsePipes, ValidationPipe } from '@nestjs/common';
 import { AuthCenterService } from './auth-center.service';
-import { LocalGuard, JwtGuard } from '@/common/guards';
+import { LocalGuard } from '@/common/guards';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthCenterGuard } from '../../common/guards/auth-center.guard';
@@ -93,13 +93,13 @@ export class AuthCenterController {
     };
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(AuthCenterGuard)
   @Get('sessions')
   async getUserSessions(@Req() req: any) {
     return this.authCenterService.getUserActiveSessions(req.user.userId);
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(AuthCenterGuard)
   @Delete('sessions/:id')
   async revokeSession(@Param('id') id: string, @Req() req: any) {
     // 这里需要添加额外的安全检查，确保用户只能撤销自己的会话

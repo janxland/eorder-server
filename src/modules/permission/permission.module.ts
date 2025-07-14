@@ -6,15 +6,20 @@
  * Copyright © 2023 Ronnie Zhang(大脸怪) | https://isme.top
  **********************************/
 
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { PermissionService } from './permission.service';
 import { PermissionController } from './permission.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Permission } from './permission.entity';
+import { AuthCenterModule } from '@/modules/auth-center/auth-center.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Permission])],
+  imports: [
+    TypeOrmModule.forFeature([Permission]),
+    forwardRef(() => AuthCenterModule)
+  ],
   controllers: [PermissionController],
   providers: [PermissionService],
+  exports: [PermissionService]
 })
 export class PermissionModule {}

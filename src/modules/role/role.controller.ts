@@ -27,11 +27,12 @@ import {
   QueryRoleDto,
   UpdateRoleDto,
 } from './dto';
-import { JwtGuard, PreviewGuard, RoleGuard } from '@/common/guards';
+import { PreviewGuard } from '@/common/guards';
+import { AuthCenterGuard } from '@/common/guards/auth-center.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 
 @Controller('role')
-@UseGuards(JwtGuard, RoleGuard)
+@UseGuards(AuthCenterGuard)
 export class RoleController {
   constructor(private readonly roleService: RoleService) {}
 
@@ -43,16 +44,19 @@ export class RoleController {
   }
 
   @Get()
+  @Roles('SUPER_ADMIN')
   findAll(@Query() query: GetRolesDto) {
     return this.roleService.findAll(query);
   }
 
   @Get('page')
+  @Roles('SUPER_ADMIN')
   findPagination(@Query() queryDto: QueryRoleDto) {
     return this.roleService.findPagination(queryDto);
   }
 
   @Get('permissions')
+  @Roles('SUPER_ADMIN')
   findRolePermissions(@Query('id') id: number) {
     return this.roleService.findRolePermissions(+id);
   }
@@ -85,6 +89,7 @@ export class RoleController {
   }
 
   @Get('permissions/tree')
+  @Roles('SUPER_ADMIN')
   findRolePermissionsTree(@Request() req: any) {
     return this.roleService.findRolePermissionsTree(req.user.currentRoleCode);
   }
