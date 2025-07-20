@@ -7,6 +7,7 @@ import {
   Query,
   Delete,
   Patch,
+  Put,
   ParseIntPipe,
   UseGuards,
   Request,
@@ -100,6 +101,30 @@ export class UserController {
     // 只能本人或者超管查询
     if (currentUser.userId === userId || currentUser.roleCodes.includes('SUPER_ADMIN')) {
       return this.userService.findUserProfile(userId);
+    }
+    throw new CustomException(ErrorCode.ERR_11003);
+  }
+
+  // 更新用户的profile - PATCH方法
+  @Patch('profile/:userId')
+  updateUserProfilePatch(@Param('userId') userId: number, @Body() profileDto: UpdateProfileDto, @Request() req: any) {
+    // 涉及隐私信息，只能本人或者超管更新
+    const currentUser = req.user;
+    // 只能本人或者超管更新
+    if (currentUser.userId === userId || currentUser.roleCodes.includes('SUPER_ADMIN')) {
+      return this.userService.updateProfile(userId, profileDto);
+    }
+    throw new CustomException(ErrorCode.ERR_11003);
+  }
+
+  // 更新用户的profile - PUT方法
+  @Put('profile/:userId')
+  updateUserProfilePut(@Param('userId') userId: number, @Body() profileDto: UpdateProfileDto, @Request() req: any) {
+    // 涉及隐私信息，只能本人或者超管更新
+    const currentUser = req.user;
+    // 只能本人或者超管更新
+    if (currentUser.userId === userId || currentUser.roleCodes.includes('SUPER_ADMIN')) {
+      return this.userService.updateProfile(userId, profileDto);
     }
     throw new CustomException(ErrorCode.ERR_11003);
   }

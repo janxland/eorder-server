@@ -4,6 +4,7 @@ import { CloudStorageService } from './cloud-storage.service';
 import { CreateStorageConfigDto, TestStorageConfigDto, UpdateStorageConfigDto } from './dto/storage-config.dto';
 import { StorageConfig } from './entities/storage-config.entity';
 import { AuthCenterGuard } from '../../common/guards/auth-center.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
 @Controller('cloud-storage/config')
 @UseGuards(AuthCenterGuard)
@@ -17,6 +18,7 @@ export class StorageConfigController {
    * 获取所有存储配置
    */
   @Get()
+  @Roles('SUPER_ADMIN')
   async findAll(@Req() req: any): Promise<{ }> {
     const userId = req.user?.userId;
     const configs = await this.storageConfigService.findAll(userId);
@@ -27,6 +29,7 @@ export class StorageConfigController {
    * 获取单个存储配置
    */
   @Get(':id')
+  @Roles('SUPER_ADMIN')
   async findOne(@Param('id') id: number, @Req() req: any): Promise<{ }> {
     const userId = req.user?.userId;
     const config = await this.storageConfigService.findById(+id, userId);
@@ -37,6 +40,7 @@ export class StorageConfigController {
    * 创建存储配置
    */
   @Post()
+  @Roles('SUPER_ADMIN')
   async create(@Body() createDto: CreateStorageConfigDto, @Req() req: any): Promise<{ }> {
     const userId = req.user?.userId;
     const config = await this.storageConfigService.create(createDto, userId);
@@ -47,6 +51,7 @@ export class StorageConfigController {
    * 更新存储配置
    */
   @Put(':id')
+  @Roles('SUPER_ADMIN')
   async update(
     @Param('id') id: number,
     @Body() updateDto: UpdateStorageConfigDto,
@@ -61,6 +66,7 @@ export class StorageConfigController {
    * 删除存储配置
    */
   @Delete(':id')
+  @Roles('SUPER_ADMIN')
   async remove(@Param('id') id: number, @Req() req: any): Promise<{ success: boolean }> {
     const userId = req.user?.userId;
     const result = await this.storageConfigService.remove(+id, userId);
@@ -73,6 +79,7 @@ export class StorageConfigController {
    * 设置默认配置
    */
   @Put(':id/default')
+  @Roles('SUPER_ADMIN')
   async setDefault(@Param('id') id: number, @Req() req: any): Promise<{ }> {
     const userId = req.user?.userId;
     const config = await this.storageConfigService.setDefault(+id, userId);
@@ -83,6 +90,7 @@ export class StorageConfigController {
    * 更改配置启用状态
    */
   @Put(':id/status')
+  @Roles('SUPER_ADMIN')
   async changeStatus(
     @Param('id') id: number,
     @Body('isEnabled') isEnabled: boolean,
@@ -97,6 +105,7 @@ export class StorageConfigController {
    * 测试连接
    */
   @Post('test-connection')
+  @Roles('SUPER_ADMIN')
   async testConnection(@Body() testDto: TestStorageConfigDto, @Req() req: any): Promise<{  }> {
     const userId = req.user?.userId;
     const result = await this.storageConfigService.testConnection(testDto, userId);
