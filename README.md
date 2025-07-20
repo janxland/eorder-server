@@ -68,7 +68,12 @@ npm install
 # 或
 yarn install
 ```
-
+eorder-server服务：
+NestJS后端服务
+支持多种部署方式：
+标准部署：npm run start:prod（使用dist/main.js）
+独立部署：npm run build:standalone生成独立部署包，然后npm run start:standalone
+部署准备：npm run deploy:prepare（生成deploy目录，包含所需文件）
 ### 3. 配置环境变量
 
 创建 `.env` 或 `.env.local` 文件，参考以下配置：
