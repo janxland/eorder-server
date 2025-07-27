@@ -16,7 +16,7 @@ import * as bcrypt from 'bcryptjs';
 @Injectable()
 export class AuthCenterService {
   // Access Token过期时间（3小时）
-  private readonly ACCESS_TOKEN_EXPIRATION = 60 * 60;
+  private readonly ACCESS_TOKEN_EXPIRATION = 60 * 60 * 6;
   // Refresh Token过期时间（3个月）
   private readonly REFRESH_TOKEN_EXPIRATION = 90 * 24 * 60 * 60;
 
