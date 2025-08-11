@@ -21,6 +21,7 @@ import { SystemModule } from './modules/system/system.module';
 import { KeyValueModule } from './modules/jsonmap/key-value.module';
 import { CloudStorageModule } from './modules/cloud-storage/cloud-storage.module';
 import { AIModelModule } from './modules/ai-model/ai-model.module';
+import { LLMModule } from './modules/llm/llm.module';
 
 @Module({
   imports: [
@@ -41,7 +42,8 @@ import { AIModelModule } from './modules/ai-model/ai-model.module';
     ePayModule,
     ProductsModule,
     CloudStorageModule,
-    AIModelModule
+    AIModelModule,
+    LLMModule,
   ],
 })
 export class AppModule {}
