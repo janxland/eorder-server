@@ -206,13 +206,13 @@ export class LLMService {
   }
 
   /**
-   * 流式预测（支持工具调用）
+   * 流式预测（支持工具调用）- 兼容old代码
    */
   async *predictStream(
     inputText: string,
     appConfigId?: number,
     customMessages?: any[],
-    temperature: number = 0.7,
+    temperature: number = 0.3,
     maxTokens: number = 1000,
     baseAPIHandler?: string,
   ) {
@@ -231,9 +231,9 @@ export class LLMService {
 
       this.logger.debug(`Using AI model: ${aiModelConfig.name} (${aiModelConfig.type})`);
 
-      // 获取应用配置的消息模板
+      // 使用传入的消息数组，如果没有则从应用配置获取
       let messages = customMessages || [];
-      if (appConfigId && !customMessages) {
+      if (!customMessages && appConfigId) {
         const appConfig = await this.appConfigRepository.findOne({
           where: { id: appConfigId, isEnabled: true }
         });
@@ -243,8 +243,10 @@ export class LLMService {
         }
       }
 
-      // 添加用户输入
-      messages.push({ role: 'user', content: safeText });
+      // 如果消息数组为空且没有用户输入，添加用户输入
+      if (messages.length === 0 || !messages.some(m => m.role === 'user')) {
+        messages.push({ role: 'user', content: safeText });
+      }
 
       // 构建工具配置
       const tools = this.buildDefaultTools(baseAPIHandler);
@@ -344,13 +346,13 @@ export class LLMService {
   }
 
   /**
-   * 完整预测（非流式，支持工具调用）
+   * 完整预测（非流式，支持工具调用）- 兼容old代码
    */
   async predictFull(
     inputText: string,
     appConfigId?: number,
     customMessages?: any[],
-    temperature: number = 0.7,
+    temperature: number = 0.3,
     maxTokens: number = 1000,
     baseAPIHandler?: string,
   ) {
@@ -369,9 +371,9 @@ export class LLMService {
 
       this.logger.debug(`Using AI model: ${aiModelConfig.name} (${aiModelConfig.type})`);
 
-      // 获取应用配置的消息模板
+      // 使用传入的消息数组，如果没有则从应用配置获取
       let messages = customMessages || [];
-      if (appConfigId && !customMessages) {
+      if (!customMessages && appConfigId) {
         const appConfig = await this.appConfigRepository.findOne({
           where: { id: appConfigId, isEnabled: true }
         });
@@ -381,8 +383,10 @@ export class LLMService {
         }
       }
 
-      // 添加用户输入
-      messages.push({ role: 'user', content: safeText });
+      // 如果消息数组为空且没有用户输入，添加用户输入
+      if (messages.length === 0 || !messages.some(m => m.role === 'user')) {
+        messages.push({ role: 'user', content: safeText });
+      }
 
       // 构建工具配置
       const tools = this.buildDefaultTools(baseAPIHandler);
