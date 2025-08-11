@@ -7,6 +7,11 @@ import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RedisService } from './redis.service';
 import { createClient } from 'redis';
+import { User } from '../modules/user/user.entity';
+import { Profile } from '../modules/user/profile.entity';
+import { Role } from '../modules/role/role.entity';
+import { Permission } from '../modules/permission/permission.entity';
+import { System } from '../modules/system/system.entity';
 
 @Global()
 @Module({
@@ -24,18 +29,18 @@ import { createClient } from 'redis';
           username: process.env.DB_USER || configService.get('DB_USER'),
           password: process.env.DB_PWD || configService.get('DB_PWD'),
           database: process.env.DB_DATABASE || configService.get('DB_DATABASE'),
-          synchronize: false, // 明确禁用同步，避免外键约束冲突
-          dropSchema: false, // 禁止删除表结构
+          synchronize: process.env.NODE_ENV === 'production' ? false : true, // 开发环境启用同步
+          dropSchema: false, // 不删除表结构
           timezone: '+08:00',
-          logging: ['error', 'warn'], // 只记录错误和警告
+          logging: ['error', 'warn'],
           extra: {
-            // 添加额外的 MySQL 配置
             charset: 'utf8mb4',
             collation: 'utf8mb4_unicode_ci',
           },
         };
       },
     }),
+    TypeOrmModule.forFeature([User, Profile, Role, Permission, System]),
   ],
   providers: [
     SharedService,

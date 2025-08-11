@@ -14,9 +14,6 @@ import { PermissionModule } from './modules/permission/permission.module';
 import { RoleModule } from './modules/role/role.module';
 import { AuthCenterModule } from './modules/auth-center/auth-center.module';
 
-import { TeacherModule } from './modules/teachersay/teachers/teacher.module';
-import { AchievementTypeModule  } from './modules/teachersay/achievement-types/achievement-type.module';
-import { AchievementModule} from './modules/teachersay/achievements/achievement.module';
 import { OrderModule } from './modules/order/order.module';
 import { ePayModule } from './modules/epay/epay.module';
 import { ProductsModule } from './modules/product/products.module';
@@ -39,10 +36,7 @@ import { AIModelModule } from './modules/ai-model/ai-model.module';
     SharedModule,
     AuthCenterModule,
     KeyValueModule,
-    TeacherModule,
     SystemModule,
-    AchievementTypeModule,
-    AchievementModule,
     OrderModule,
     ePayModule,
     ProductsModule,

@@ -10,8 +10,6 @@ import {
 } from 'typeorm';
 import { Profile } from './profile.entity';
 import { Role } from '@/modules/role/role.entity';
-import { Teacher } from '../teachersay/teachers/teacher.entity';
-
 @Entity()
 export class User {
   @PrimaryGeneratedColumn()
@@ -44,8 +42,4 @@ export class User {
   @JoinTable()
   roles: Role[];
 
-  @OneToOne(() => Teacher, (teacher) => teacher.user, {
-    cascade: true, // 允许级联操作
-  })
-  teacher: Teacher;
 }
