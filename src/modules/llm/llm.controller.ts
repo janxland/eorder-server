@@ -27,6 +27,25 @@ export class LLMController {
   constructor(private readonly llmService: LLMService) {}
 
   /**
+   * 根路径测试接口
+   */
+  @Get()
+  async root() {
+    return {
+      message: 'LLM module is working!',
+      endpoints: [
+        'GET /llm/test',
+        'GET /llm/models',
+        'GET /llm/apps',
+        'POST /llm/predict',
+        'POST /llm/predict_stream'
+      ],
+      timestamp: new Date().toISOString(),
+      status: 'ok'
+    };
+  }
+
+  /**
    * 测试接口 - 验证模块是否正常工作
    */
   @Get('test')
