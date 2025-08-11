@@ -66,6 +66,20 @@ export class LLMService {
     throw new Error(`Provider ${config.type} requires extraConfig.endpointPath to be set (or switch to OPENAI/SILICON_FLOW compatible provider).`);
   }
 
+  // 规范化 URL，避免重复拼接 endpointPath
+  private buildRequestUrl(config: AIModelConfig): string {
+    const endpointPath = this.resolveEndpointPath(config);
+    const base = (config.baseUrl || '').replace(/\/+$/, '');
+    const normalizedEndpoint = (endpointPath || '').replace(/^\/+/, '');
+    if (!normalizedEndpoint) return base;
+
+    // 如果 base 已以该 endpoint 结尾，则不再追加
+    if (base.toLowerCase().endsWith(normalizedEndpoint.toLowerCase())) {
+      return base;
+    }
+    return `${base}/${normalizedEndpoint}`;
+  }
+
   /**
    * 获取默认的AI模型配置（带环境变量兜底）
    */
@@ -187,8 +201,7 @@ export class LLMService {
           headers['Authorization'] = `Bearer ${aiModelConfig.apiKey}`;
       }
 
-      const endpointPath = this.resolveEndpointPath(aiModelConfig);
-      const url = `${aiModelConfig.baseUrl}${endpointPath}`;
+      const url = this.buildRequestUrl(aiModelConfig);
       this.logger.debug(`Making request to: ${url}`);
 
       const response = await axios.post(
@@ -312,8 +325,7 @@ export class LLMService {
           headers['Authorization'] = `Bearer ${aiModelConfig.apiKey}`;
       }
 
-      const endpointPath = this.resolveEndpointPath(aiModelConfig);
-      const url = `${aiModelConfig.baseUrl}${endpointPath}`;
+      const url = this.buildRequestUrl(aiModelConfig);
       this.logger.debug(`Making request to: ${url}`);
 
       const response = await axios.post(
