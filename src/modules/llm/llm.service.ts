@@ -80,6 +80,77 @@ export class LLMService {
     return `${base}/${normalizedEndpoint}`;
   }
 
+  // 格式化工具配置，参考old文件夹的实现
+  private formatTools(tools: any[]): any[] {
+    return tools.map(tool => {
+      const functionParams = {
+        type: 'object',
+        required: tool.required_parameters,
+        properties: {}
+      };
+
+      if (tool.parameters) {
+        for (const [paramName, paramDetails] of Object.entries(tool.parameters)) {
+          functionParams.properties[paramName] = paramDetails;
+        }
+      }
+
+      return {
+        type: 'function',
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: functionParams
+        },
+        path: '' // 如果需要路径，可以在这里设置
+      };
+    });
+  }
+
+  // 构建默认工具列表
+  private buildDefaultTools(baseAPIHandler?: string): any[] {
+    const tools = [
+      {
+        name: 'NULLTools',
+        description: '防止出现工具错误，无任何内容的工具，当agent发现没有可以调用的工具调用这个',
+        required_parameters: [],
+        parameters: {},
+      },
+      {
+        name: 'run_js_code',
+        description: '在浏览器执行一段JS代码',
+        required_parameters: ['code'],
+        parameters: {
+          code: { type: 'string', description: '要执行的JavaScript代码' },
+        },
+      }
+    ];
+
+    // 如果有baseAPIHandler，解析并添加相关工具
+    if (baseAPIHandler) {
+      try {
+        const apiHandler = typeof baseAPIHandler === 'string' ? JSON.parse(baseAPIHandler) : baseAPIHandler;
+        for (const [key, value] of Object.entries(apiHandler)) {
+          if (typeof value === 'object' && value !== null) {
+            const apiValue = value as any;
+            tools.push({
+              name: key,
+              description: apiValue.desc || `调用${key}功能`,
+              required_parameters: ['data'],
+              parameters: {
+                data: { type: 'string', description: apiValue.arguments || '参数数据' },
+              } as any,
+            });
+          }
+        }
+      } catch (error) {
+        this.logger.warn('Failed to parse baseAPIHandler:', error);
+      }
+    }
+
+    return tools;
+  }
+
   /**
    * 获取默认的AI模型配置（带环境变量兜底）
    */
@@ -135,7 +206,7 @@ export class LLMService {
   }
 
   /**
-   * 流式预测
+   * 流式预测（支持工具调用）
    */
   async *predictStream(
     inputText: string,
@@ -143,6 +214,7 @@ export class LLMService {
     customMessages?: any[],
     temperature: number = 0.7,
     maxTokens: number = 1000,
+    baseAPIHandler?: string,
   ) {
     const safeText = typeof inputText === 'string' ? inputText : '';
     this.logger.debug(`Starting stream prediction with input: ${safeText.slice(0, 50)}...`);
@@ -174,6 +246,10 @@ export class LLMService {
       // 添加用户输入
       messages.push({ role: 'user', content: safeText });
 
+      // 构建工具配置
+      const tools = this.buildDefaultTools(baseAPIHandler);
+      const formattedTools = this.formatTools(tools);
+
       const payload = {
         model: aiModelConfig.model,
         messages,
@@ -181,6 +257,7 @@ export class LLMService {
         temperature: aiModelConfig.temperature || temperature,
         max_tokens: aiModelConfig.maxTokens || maxTokens,
         top_p: aiModelConfig.topP || 0.9,
+        tools: formattedTools,
       };
 
       const headers: Record<string, string> = {
@@ -235,8 +312,16 @@ export class LLMService {
             if (parsed.choices && parsed.choices.length > 0) {
               for (const choice of parsed.choices) {
                 const delta = choice.delta || {};
+                const result: Record<string, any> = { role: 'assistant' };
+                
                 if (delta.content) {
-                  yield { content: delta.content };
+                  result.content = delta.content;
+                  yield result;
+                }
+
+                if (delta.tool_calls) {
+                  result.tool_calls = delta.tool_calls;
+                  yield result;
                 }
               }
             }
@@ -259,7 +344,7 @@ export class LLMService {
   }
 
   /**
-   * 完整预测（非流式）
+   * 完整预测（非流式，支持工具调用）
    */
   async predictFull(
     inputText: string,
@@ -267,6 +352,7 @@ export class LLMService {
     customMessages?: any[],
     temperature: number = 0.7,
     maxTokens: number = 1000,
+    baseAPIHandler?: string,
   ) {
     const safeText = typeof inputText === 'string' ? inputText : '';
     this.logger.debug(`Starting full prediction with input: ${safeText.slice(0, 50)}...`);
@@ -298,6 +384,10 @@ export class LLMService {
       // 添加用户输入
       messages.push({ role: 'user', content: safeText });
 
+      // 构建工具配置
+      const tools = this.buildDefaultTools(baseAPIHandler);
+      const formattedTools = this.formatTools(tools);
+
       const payload = {
         model: aiModelConfig.model,
         messages,
@@ -305,6 +395,7 @@ export class LLMService {
         temperature: aiModelConfig.temperature || temperature,
         max_tokens: aiModelConfig.maxTokens || maxTokens,
         top_p: aiModelConfig.topP || 0.9,
+        tools: formattedTools,
       };
 
       const headers: Record<string, string> = {

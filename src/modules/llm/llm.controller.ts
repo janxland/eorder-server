@@ -20,6 +20,7 @@ class PredictRequest {
   temperature?: number;
   max_tokens?: number;
   stream?: boolean;
+  baseAPIHandler?: string;
 }
 
 @Controller('llm')
@@ -72,12 +73,14 @@ export class LLMController {
         req.app_config_id,
         req.messages,
         req.temperature,
-        req.max_tokens
+        req.max_tokens,
+        req.baseAPIHandler
       );
 
       for await (const chunk of result) {
         const data = {
           content: chunk.content || '',
+          tool_calls: chunk.tool_calls || null,
         };
         res.write(`${JSON.stringify(data)}\n`);
       }
@@ -98,7 +101,8 @@ export class LLMController {
         req.app_config_id,
         req.messages,
         req.temperature,
-        req.max_tokens
+        req.max_tokens,
+        req.baseAPIHandler
       );
       return response;
     } catch (err) {
