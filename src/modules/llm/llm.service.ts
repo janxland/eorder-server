@@ -67,7 +67,8 @@ export class LLMService {
     temperature: number = 0.7,
     maxTokens: number = 1000,
   ) {
-    this.logger.debug(`Starting stream prediction with input: ${inputText.substring(0, 50)}...`);
+    const safeText = typeof inputText === 'string' ? inputText : '';
+    this.logger.debug(`Starting stream prediction with input: ${safeText.slice(0, 50)}...`);
     
     try {
       const aiModelConfig = appConfigId 
@@ -94,7 +95,7 @@ export class LLMService {
       }
 
       // 添加用户输入
-      messages.push({ role: 'user', content: inputText });
+      messages.push({ role: 'user', content: safeText });
 
       const payload = {
         model: aiModelConfig.model,
@@ -105,7 +106,7 @@ export class LLMService {
         top_p: aiModelConfig.topP || 0.9,
       };
 
-      const headers = {
+      const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
 
@@ -191,7 +192,8 @@ export class LLMService {
     temperature: number = 0.7,
     maxTokens: number = 1000,
   ) {
-    this.logger.debug(`Starting full prediction with input: ${inputText.substring(0, 50)}...`);
+    const safeText = typeof inputText === 'string' ? inputText : '';
+    this.logger.debug(`Starting full prediction with input: ${safeText.slice(0, 50)}...`);
     
     try {
       const aiModelConfig = appConfigId 
@@ -218,7 +220,7 @@ export class LLMService {
       }
 
       // 添加用户输入
-      messages.push({ role: 'user', content: inputText });
+      messages.push({ role: 'user', content: safeText });
 
       const payload = {
         model: aiModelConfig.model,
@@ -229,7 +231,7 @@ export class LLMService {
         top_p: aiModelConfig.topP || 0.9,
       };
 
-      const headers = {
+      const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
 
