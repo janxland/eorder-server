@@ -24,9 +24,15 @@ import { createClient } from 'redis';
           username: process.env.DB_USER || configService.get('DB_USER'),
           password: process.env.DB_PWD || configService.get('DB_PWD'),
           database: process.env.DB_DATABASE || configService.get('DB_DATABASE'),
-          dropSchema: false,
+          synchronize: false, // 明确禁用同步，避免外键约束冲突
+          dropSchema: false, // 禁止删除表结构
           timezone: '+08:00',
-          logging: ['error', 'warn'],
+          logging: ['error', 'warn'], // 只记录错误和警告
+          extra: {
+            // 添加额外的 MySQL 配置
+            charset: 'utf8mb4',
+            collation: 'utf8mb4_unicode_ci',
+          },
         };
       },
     }),
