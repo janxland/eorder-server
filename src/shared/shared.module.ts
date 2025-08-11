@@ -24,8 +24,9 @@ import { createClient } from 'redis';
           username: process.env.DB_USER || configService.get('DB_USER'),
           password: process.env.DB_PWD || configService.get('DB_PWD'),
           database: process.env.DB_DATABASE || configService.get('DB_DATABASE'),
-          synchronize: process.env.NODE_ENV === 'production' ? false : configService.get('DB_SYNC'),
+          dropSchema: false,
           timezone: '+08:00',
+          logging: ['error', 'warn'],
         };
       },
     }),
