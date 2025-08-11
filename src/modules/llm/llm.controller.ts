@@ -12,15 +12,17 @@ import {
 import { Response } from 'express';
 import { LLMService } from './llm.service';
 
-// DTO类
+// 兼容old代码的DTO类
 class PredictRequest {
   input_text: string;
+  baseAPIHandler?: string;
+  stream?: boolean;
+  messages?: Array<any>;
+  
+  // 新字段（可选）
   app_config_id?: number;
-  messages?: any[];
   temperature?: number;
   max_tokens?: number;
-  stream?: boolean;
-  baseAPIHandler?: string;
 }
 
 @Controller('llm')
@@ -59,24 +61,47 @@ export class LLMController {
   }
 
   /**
-   * 流式预测接口
+   * 流式预测接口 - 完全兼容old代码格式
    */
   @Post('predict_stream')
   @Header('Content-Type', 'text/event-stream')
   @Header('Cache-Control', 'no-cache')
   async predictStream(@Body() req: PredictRequest, @Res() res: Response) {
     try {
+      // 构造消息 - 兼容old代码逻辑
+      let messages = [
+        {
+          role: 'system',
+          content:
+            '你是一个博客网站的助手，你可以自由调用JavaScript的API，然后以下是一些文章列表和ID你可以给',
+        },
+        {
+          role: 'system',
+          content: `解读用户需求【如果明确需要执行代码就不要输出其他文本】，你需要写JavaScript代码才能调用底层，你能调用的API不限于,你可以用run_js_code工具调用以下函数注意这里的函数是通过eval()调用需要你输出完整的调用链如baseAPIhandle.correctSong.handle('left')：${req.baseAPIHandler}`,
+        },
+        { role: 'user', content: req.input_text },
+      ];
+      
+      // 如果有自定义消息，合并到前面
+      if (req.messages) {
+        messages = [...req.messages, ...messages];
+      }
+      
+      console.log('Messages:', messages);
+      
       res.status(HttpStatus.OK);
       
+      // 调用服务，传递所有参数
       const result = this.llmService.predictStream(
         req.input_text,
         req.app_config_id,
-        req.messages,
-        req.temperature,
-        req.max_tokens,
+        messages,
+        req.temperature || 0.3,
+        req.max_tokens || 1000,
         req.baseAPIHandler
       );
 
+      // 兼容old代码的返回格式
       for await (const chunk of result) {
         const data = {
           content: chunk.content || '',
@@ -91,17 +116,18 @@ export class LLMController {
   }
 
   /**
-   * 完整预测接口
+   * 完整预测接口 - 兼容old代码格式
    */
   @Post('predict')
   async predict(@Body() req: PredictRequest) {
     try {
+      // 兼容old代码的简单调用方式
       const response = await this.llmService.predictFull(
         req.input_text,
         req.app_config_id,
         req.messages,
-        req.temperature,
-        req.max_tokens,
+        req.temperature || 0.3,
+        req.max_tokens || 1000,
         req.baseAPIHandler
       );
       return response;
