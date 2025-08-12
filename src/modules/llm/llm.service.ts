@@ -226,85 +226,34 @@ export class LLMService {
   }
 
   /**
-   * 流式预测（支持工具调用）- 兼容old代码
+   * 流式预测（支持工具调用）- 完全按照old的实现
    */
-  async *predictStream(
-    inputText: string,
-    appConfigId?: number,
-    customMessages?: any[],
+  public async *predictStream(
+    messages: any[],
+    tools: any[] = [],
     temperature: number = 0.3,
-    maxTokens: number = 1000,
-    baseAPIHandler?: string,
+    top_p: number = 0.9,
   ) {
-    const safeText = typeof inputText === 'string' ? inputText : '';
-    this.logger.debug(`Starting stream prediction with input: ${safeText.slice(0, 50)}...`);
-    
+    const payload = {
+      model: process.env.LLM_MODEL || process.env.LLM_MODLE || 'Qwen/Qwen2.5-7B-Instruct',
+      messages,
+      stream: true,
+      temperature,
+      top_p,
+      "tools": this.formatTools(tools),
+    };
+
+    const headers = {
+      Authorization: `Bearer ${process.env.LLM_SILICONFLOW_KEY || 'sk-betbqvqrfonowtkyfajxcucfzvflzdpokovambjwrhfagtkv'}`,
+      'Content-Type': 'application/json',
+    };
+
     try {
-      const aiModelConfig = appConfigId 
-        ? await this.getAIModelConfigByApp(appConfigId)
-        : await this.getDefaultAIModelConfig();
-
-      if (!aiModelConfig) {
-        this.logger.error('No available AI model configuration found');
-        throw new Error('No available AI model configuration found');
-      }
-
-      this.logger.debug(`Using AI model: ${aiModelConfig.name} (${aiModelConfig.type})`);
-
-      // 直接使用传入的消息数组，不做任何修改
-      let messages = customMessages || [];
-      
-      // 如果消息数组为空，添加用户输入
-      if (messages.length === 0) {
-        messages = [{ role: 'user', content: safeText }];
-      }
-
-      // 构建工具配置
-      const tools = this.buildDefaultTools(baseAPIHandler);
-      const formattedTools = this.formatTools(tools);
-
-      this.logger.debug(`Using ${messages.length} messages and ${tools.length} tools`);
-
-      const payload = {
-        model: aiModelConfig.model,
-        messages,
-        stream: true,
-        temperature: aiModelConfig.temperature || temperature,
-        max_tokens: aiModelConfig.maxTokens || maxTokens,
-        top_p: aiModelConfig.topP || 0.9,
-        tools: formattedTools,
-      };
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-
-      // 根据不同的AI模型类型设置认证
-      switch (aiModelConfig.type) {
-        case AIModelType.OPENAI:
-        case AIModelType.SILICON_FLOW:
-        case AIModelType.BAIDU:
-          headers['Authorization'] = `Bearer ${aiModelConfig.apiKey}`;
-          break;
-        case AIModelType.ANTHROPIC:
-          headers['x-api-key'] = aiModelConfig.apiKey;
-          break;
-        default:
-          headers['Authorization'] = `Bearer ${aiModelConfig.apiKey}`;
-      }
-
-      const url = this.buildRequestUrl(aiModelConfig);
-      this.logger.debug(`Making request to: ${url}`);
-
-      const response = await axios.post(
-        url,
-        payload, 
-        {
-          headers,
-          timeout: aiModelConfig.timeout || 60000,
-          responseType: 'stream',
-        }
-      );
+      const response = await axios.post(`${process.env.LLM_BASE_URL || 'https://api.siliconflow.cn/v1'}/chat/completions`, payload, {
+        headers,
+        timeout: 60000,
+        responseType: 'stream',
+      });
       
       let buffer = '';
       for await (const chunk of response.data) {
@@ -322,132 +271,108 @@ export class LLMService {
             continue;
           }
 
+          let parsed;
           try {
-            const parsed = JSON.parse(jsonStr);
-            if (parsed.choices && parsed.choices.length > 0) {
-              for (const choice of parsed.choices) {
-                const delta = choice.delta || {};
-                const result: Record<string, any> = { role: 'assistant' };
-                
-                if (delta.content) {
-                  result.content = delta.content;
-                  yield result;
-                }
+            parsed = JSON.parse(jsonStr);
+          } catch (e) {
+            console.error('Failed to parse JSON:', jsonStr);
+            continue;
+          }
+          
+          if (parsed.choices && parsed.choices.length > 0) {
+            for (const choice of parsed.choices) {
+              const delta = choice.delta || {};
+              const result: Record<string, any> = { role: 'assistant' };
+              if (delta.content) {
+                result.content = delta.content;
+                yield result;
+              }
 
-                if (delta.tool_calls) {
-                  result.tool_calls = delta.tool_calls;
-                  yield result;
-                }
+              if (delta.tool_calls) {
+                result.tool_calls = delta.tool_calls;
+                yield result;
               }
             }
-          } catch (e) {
-            this.logger.error('Failed to parse JSON:', jsonStr);
-            continue;
           }
         }
       }
       
-      // 更新使用统计（只有持久化配置才更新）
-      if ((aiModelConfig as any).id) {
-        await this.updateUsageStats((aiModelConfig as any).id);
-      }
-      
     } catch (err) {
-      this.logger.error('Error in predictStream:', err);
+      console.error('Error in predictStream:', err);
       throw err;
     }
   }
 
   /**
-   * 完整预测（非流式，支持工具调用）- 兼容old代码
+   * 完整预测（非流式，支持工具调用）- 完全按照old的实现
    */
-  async predictFull(
-    inputText: string,
-    appConfigId?: number,
-    customMessages?: any[],
-    temperature: number = 0.3,
-    maxTokens: number = 1000,
-    baseAPIHandler?: string,
-  ) {
-    const safeText = typeof inputText === 'string' ? inputText : '';
-    this.logger.debug(`Starting full prediction with input: ${safeText.slice(0, 50)}...`);
-    
+  public async predictFull(inputText: string) {
+    const messages = [{ role: 'user', content: inputText }];
+    const payload = {
+      model: process.env.LLM_MODEL || process.env.LLM_MODLE || 'Qwen/Qwen2.5-7B-Instruct',
+      messages,
+      stream: true,
+      tools: [],
+    };
+
+    const headers = {
+      Authorization: `Bearer ${process.env.LLM_SILICONFLOW_KEY || 'sk-betbqvqrfonowtkyfajxcucfzvflzdpokovambjwrhfagtkv'}`,
+      'Content-Type': 'application/json',
+    };
+
+    const collected: Array<{ tool_calls?: any; content?: string }> = [];
+
     try {
-      const aiModelConfig = appConfigId 
-        ? await this.getAIModelConfigByApp(appConfigId)
-        : await this.getDefaultAIModelConfig();
+      const response = await axios.post(`${process.env.LLM_BASE_URL || 'https://api.siliconflow.cn/v1'}/chat/completions`, payload, {
+        headers,
+        timeout: 60000,
+        responseType: 'stream',
+      });
 
-      if (!aiModelConfig) {
-        this.logger.error('No available AI model configuration found');
-        throw new Error('No available AI model configuration found');
-      }
+      let buffer = '';
+      for await (const chunk of response.data) {
+        buffer += chunk.toString('utf8');
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-      this.logger.debug(`Using AI model: ${aiModelConfig.name} (${aiModelConfig.type})`);
+        for (let line of lines) {
+          line = line.trim();
+          if (!line.startsWith('data: ')) {
+            continue;
+          }
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr || jsonStr === '[DONE]') {
+            continue;
+          }
 
-      // 直接使用传入的消息数组，不做任何修改
-      let messages = customMessages || [];
-      
-      // 如果消息数组为空，添加用户输入
-      if (messages.length === 0) {
-        messages = [{ role: 'user', content: safeText }];
-      }
+          let parsed;
+          try {
+            parsed = JSON.parse(jsonStr);
+          } catch (e) {
+            console.error('Failed to parse JSON:', jsonStr);
+            continue;
+          }
 
-      // 构建工具配置
-      const tools = this.buildDefaultTools(baseAPIHandler);
-      const formattedTools = this.formatTools(tools);
+          if (parsed.choices && parsed.choices.length > 0) {
+            for (const choice of parsed.choices) {
+              const delta = choice.delta || {};
 
-      this.logger.debug(`Using ${messages.length} messages and ${tools.length} tools`);
-
-      const payload = {
-        model: aiModelConfig.model,
-        messages,
-        stream: false,
-        temperature: aiModelConfig.temperature || temperature,
-        max_tokens: aiModelConfig.maxTokens || maxTokens,
-        top_p: aiModelConfig.topP || 0.9,
-        tools: formattedTools,
-      };
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-
-      // 根据不同的AI模型类型设置认证
-      switch (aiModelConfig.type) {
-        case AIModelType.OPENAI:
-        case AIModelType.SILICON_FLOW:
-        case AIModelType.BAIDU:
-          headers['Authorization'] = `Bearer ${aiModelConfig.apiKey}`;
-          break;
-        case AIModelType.ANTHROPIC:
-          headers['x-api-key'] = aiModelConfig.apiKey;
-          break;
-        default:
-          headers['Authorization'] = `Bearer ${aiModelConfig.apiKey}`;
-      }
-
-      const url = this.buildRequestUrl(aiModelConfig);
-      this.logger.debug(`Making request to: ${url}`);
-
-      const response = await axios.post(
-        url,
-        payload, 
-        {
-          headers,
-          timeout: aiModelConfig.timeout || 60000,
+              if (delta.tool_calls) {
+                collected.push({ tool_calls: delta.tool_calls });
+              }
+              if (delta.content) {
+                collected.push({ content: delta.content });
+              }
+            }
+          }
         }
-      );
-
-      // 更新使用统计（只有持久化配置才更新）
-      if ((aiModelConfig as any).id) {
-        await this.updateUsageStats((aiModelConfig as any).id);
       }
-
-      return response.data;
     } catch (err) {
-      this.logger.error('Error in predictFull:', err);
+      console.error('Error in predictFull:', err);
       throw err;
     }
+
+    return collected;
   }
 
   /**
