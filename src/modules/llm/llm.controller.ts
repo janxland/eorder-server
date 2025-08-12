@@ -12,14 +12,12 @@ import {
 import { Response } from 'express';
 import { LLMService } from './llm.service';
 
-// 兼容old代码的DTO类
-class PredictRequest {
+// 兼容old代码的DTO类 - 简化版本
+interface PredictRequest {
   input_text: string;
   baseAPIHandler?: string;
   stream?: boolean;
   messages?: Array<any>;
-  
-  // 新字段（可选）
   app_config_id?: number;
   temperature?: number;
   max_tokens?: number;
@@ -68,6 +66,14 @@ export class LLMController {
   @Header('Cache-Control', 'no-cache')
   async predictStream(@Body() req: PredictRequest, @Res() res: Response) {
     try {
+      // 调试：打印原始请求体
+      console.log('Raw request body:', JSON.stringify(req, null, 2));
+      
+      // 验证必要字段
+      if (!req.input_text) {
+        throw new HttpException('input_text is required', HttpStatus.BAD_REQUEST);
+      }
+
       // 直接使用传入的messages，不做任何修改
       let messages = req.messages || [];
       
@@ -115,6 +121,14 @@ export class LLMController {
   @Post('predict')
   async predict(@Body() req: PredictRequest) {
     try {
+      // 调试：打印原始请求体
+      console.log('Raw request body:', JSON.stringify(req, null, 2));
+      
+      // 验证必要字段
+      if (!req.input_text) {
+        throw new HttpException('input_text is required', HttpStatus.BAD_REQUEST);
+      }
+
       // 直接使用传入的messages，不做任何修改
       let messages = req.messages || [];
       
