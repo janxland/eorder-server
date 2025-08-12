@@ -162,18 +162,27 @@ export class LLMService {
   async getDefaultAIModelConfig(): Promise<AIModelConfig | null> {
     try {
       this.logger.debug('Getting default AI model config...');
-      const config = await this.aiModelConfigRepository.findOne({
-        where: { isDefault: true, isEnabled: true }
-      });
-      if (config) {
-        this.logger.debug(`Found default config: ${config.name}`);
-        return config;
+      
+      // 首先尝试从数据库获取
+      try {
+        const config = await this.aiModelConfigRepository.findOne({
+          where: { isDefault: true, isEnabled: true }
+        });
+        if (config) {
+          this.logger.debug(`Found default config: ${config.name}`);
+          return config;
+        }
+      } catch (dbError) {
+        this.logger.warn('Database error, using ENV fallback:', dbError.message);
       }
+      
+      // 如果数据库失败，使用环境变量兜底
       const envFallback = this.buildEnvFallbackConfig();
       if (envFallback) {
         this.logger.debug(`Using ENV fallback config: ${envFallback.name}`);
         return envFallback;
       }
+      
       this.logger.debug('No default config found and no ENV fallback available');
       return null;
     } catch (error) {
@@ -190,14 +199,20 @@ export class LLMService {
   async getAIModelConfigByApp(appConfigId: number): Promise<AIModelConfig | null> {
     try {
       this.logger.debug(`Getting AI model config for app ${appConfigId}...`);
-      const appConfig = await this.appConfigRepository.findOne({
-        where: { id: appConfigId, isEnabled: true },
-        relations: ['aiModelConfig']
-      });
       
-      if (appConfig?.aiModelConfig) {
-        this.logger.debug(`Found AI model config: ${appConfig.aiModelConfig.name}`);
-        return appConfig.aiModelConfig;
+      // 首先尝试从数据库获取
+      try {
+        const appConfig = await this.appConfigRepository.findOne({
+          where: { id: appConfigId, isEnabled: true },
+          relations: ['aiModelConfig']
+        });
+        
+        if (appConfig?.aiModelConfig) {
+          this.logger.debug(`Found AI model config: ${appConfig.aiModelConfig.name}`);
+          return appConfig.aiModelConfig;
+        }
+      } catch (dbError) {
+        this.logger.warn('Database error, using default config:', dbError.message);
       }
       
       this.logger.debug('No AI model config found for app, using default');
