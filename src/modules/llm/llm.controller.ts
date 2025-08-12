@@ -71,11 +71,14 @@ export class LLMController {
       // 直接使用传入的messages，不做任何修改
       let messages = req.messages || [];
       
-      // 如果没有传入messages，创建一个简单的用户消息
-      if (messages.length === 0) {
-        messages = [{ role: 'user', content: req.input_text }];
+      // 确保最后一条消息是用户输入
+      const hasUserInput = messages.some(m => m.role === 'user' && m.content === req.input_text);
+      if (!hasUserInput) {
+        messages.push({ role: 'user', content: req.input_text });
       }
       
+      console.log('Input text:', req.input_text);
+      console.log('Messages count:', messages.length);
       console.log('Messages:', JSON.stringify(messages, null, 2));
       console.log('baseAPIHandler:', req.baseAPIHandler);
       
@@ -115,10 +118,15 @@ export class LLMController {
       // 直接使用传入的messages，不做任何修改
       let messages = req.messages || [];
       
-      // 如果没有传入messages，创建一个简单的用户消息
-      if (messages.length === 0) {
-        messages = [{ role: 'user', content: req.input_text }];
+      // 确保最后一条消息是用户输入
+      const hasUserInput = messages.some(m => m.role === 'user' && m.content === req.input_text);
+      if (!hasUserInput) {
+        messages.push({ role: 'user', content: req.input_text });
       }
+
+      console.log('Input text:', req.input_text);
+      console.log('Messages count:', messages.length);
+      console.log('Messages:', JSON.stringify(messages, null, 2));
 
       // 兼容old代码的简单调用方式
       const response = await this.llmService.predictFull(
