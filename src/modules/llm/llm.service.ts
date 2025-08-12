@@ -109,7 +109,7 @@ export class LLMService {
 
   // 构建默认工具列表
   private buildDefaultTools(baseAPIHandler?: string): any[] {
-    const tools = [
+    const tools: any[] = [
       {
         name: 'NULLTools',
         description: '防止出现工具错误，无任何内容的工具，当agent发现没有可以调用的工具调用这个',
@@ -133,16 +133,21 @@ export class LLMService {
         for (const [key, value] of Object.entries(apiHandler)) {
           if (typeof value === 'object' && value !== null) {
             const apiValue = value as any;
+            // 使用key作为工具名称，确保与baseAPIHandler中的键名一致
             tools.push({
               name: key,
               description: apiValue.desc || `调用${key}功能`,
               required_parameters: ['data'],
               parameters: {
-                data: { type: 'string', description: apiValue.arguments || '参数数据' },
-              } as any,
+                data: { 
+                  type: 'string', 
+                  description: apiValue.arguments || '参数数据' 
+                },
+              },
             });
           }
         }
+        this.logger.debug(`Added ${Object.keys(apiHandler).length} tools from baseAPIHandler`);
       } catch (error) {
         this.logger.warn('Failed to parse baseAPIHandler:', error);
       }
