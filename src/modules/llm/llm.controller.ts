@@ -22,7 +22,10 @@ class PredictRequest {
 
 @Controller('llm')
 export class LLMController {
-  constructor(private readonly llmService: LLMService) {}
+  constructor(
+    private readonly llmService: LLMService,
+    private readonly tools: Tools
+  ) {}
 
   /**
    * 根路径测试接口
@@ -88,12 +91,10 @@ export class LLMController {
       
       // 调用服务，使用Tools类
       const result = this.llmService.predictStream(
-        req.input_text,
-        undefined,
         messages,
+        this.tools.tools,
         0.3,
-        1000,
-        req.baseAPIHandler
+        0.9
       );
 
       // 兼容old代码的返回格式
@@ -118,13 +119,7 @@ export class LLMController {
   async predict(@Body() req: PredictRequest) {
     try {
       // 完全按照old的实现
-      const response = await this.llmService.predictFull(
-        req.input_text,
-        undefined,
-        undefined,
-        0.3,
-        1000
-      );
+      const response = await this.llmService.predictFull(req.input_text);
       return response;
     } catch (err) {
       console.error('Error in predict:', err);
