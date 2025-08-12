@@ -68,26 +68,32 @@ export class LLMController {
   @Header('Cache-Control', 'no-cache')
   async predictStream(@Body() req: PredictRequest, @Res() res: Response) {
     try {
-      // 构造消息 - 兼容old代码逻辑
-      let messages = [
-        {
-          role: 'system',
-          content:
-            '你是一个博客网站的助手，你可以自由调用JavaScript的API，然后以下是一些文章列表和ID你可以给',
-        },
-        {
-          role: 'system',
-          content: `解读用户需求【如果明确需要执行代码就不要输出其他文本】，你需要写JavaScript代码才能调用底层，你能调用的API不限于,你可以用run_js_code工具调用以下函数注意这里的函数是通过eval()调用需要你输出完整的调用链如baseAPIhandle.correctSong.handle('left')：${req.baseAPIHandler}`,
-        },
-        { role: 'user', content: req.input_text },
-      ];
+      // 直接使用传入的messages，如果没有则使用默认的
+      let messages = req.messages || [];
       
-      // 如果有自定义消息，合并到前面
-      if (req.messages) {
-        messages = [...req.messages, ...messages];
+      // 如果没有传入messages，使用默认的系统消息
+      if (messages.length === 0) {
+        messages = [
+          {
+            role: 'system',
+            content: '你是一个博客网站的助手，你可以自由调用JavaScript的API，然后以下是一些文章列表和ID你可以给',
+          },
+          {
+            role: 'system',
+            content: `解读用户需求【如果明确需要执行代码就不要输出其他文本】，你需要写JavaScript代码才能调用底层，你能调用的API不限于,你可以用run_js_code工具调用以下函数注意这里的函数是通过eval()调用需要你输出完整的调用链如baseAPIhandle.correctSong.handle('left')：${req.baseAPIHandler || ''}`,
+          },
+          { role: 'user', content: req.input_text },
+        ];
+      } else {
+        // 如果有传入的messages，确保最后一条是用户输入
+        const hasUserInput = messages.some(m => m.role === 'user' && m.content === req.input_text);
+        if (!hasUserInput) {
+          messages.push({ role: 'user', content: req.input_text });
+        }
       }
       
-      console.log('Messages:', messages);
+      console.log('Messages:', JSON.stringify(messages, null, 2));
+      console.log('baseAPIHandler:', req.baseAPIHandler);
       
       res.status(HttpStatus.OK);
       
@@ -111,6 +117,7 @@ export class LLMController {
       }
       res.end();
     } catch (err) {
+      console.error('Error in predictStream:', err);
       throw new HttpException(err.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
@@ -121,17 +128,42 @@ export class LLMController {
   @Post('predict')
   async predict(@Body() req: PredictRequest) {
     try {
+      // 直接使用传入的messages，如果没有则使用默认的
+      let messages = req.messages || [];
+      
+      // 如果没有传入messages，使用默认的系统消息
+      if (messages.length === 0) {
+        messages = [
+          {
+            role: 'system',
+            content: '你是一个博客网站的助手，你可以自由调用JavaScript的API，然后以下是一些文章列表和ID你可以给',
+          },
+          {
+            role: 'system',
+            content: `解读用户需求【如果明确需要执行代码就不要输出其他文本】，你需要写JavaScript代码才能调用底层，你能调用的API不限于,你可以用run_js_code工具调用以下函数注意这里的函数是通过eval()调用需要你输出完整的调用链如baseAPIhandle.correctSong.handle('left')：${req.baseAPIHandler || ''}`,
+          },
+          { role: 'user', content: req.input_text },
+        ];
+      } else {
+        // 如果有传入的messages，确保最后一条是用户输入
+        const hasUserInput = messages.some(m => m.role === 'user' && m.content === req.input_text);
+        if (!hasUserInput) {
+          messages.push({ role: 'user', content: req.input_text });
+        }
+      }
+
       // 兼容old代码的简单调用方式
       const response = await this.llmService.predictFull(
         req.input_text,
         req.app_config_id,
-        req.messages,
+        messages,
         req.temperature || 0.3,
         req.max_tokens || 1000,
         req.baseAPIHandler
       );
       return response;
     } catch (err) {
+      console.error('Error in predict:', err);
       throw new HttpException(err.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
