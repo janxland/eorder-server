@@ -68,28 +68,12 @@ export class LLMController {
   @Header('Cache-Control', 'no-cache')
   async predictStream(@Body() req: PredictRequest, @Res() res: Response) {
     try {
-      // 直接使用传入的messages，如果没有则使用默认的
+      // 直接使用传入的messages，不做任何修改
       let messages = req.messages || [];
       
-      // 如果没有传入messages，使用默认的系统消息
+      // 如果没有传入messages，创建一个简单的用户消息
       if (messages.length === 0) {
-        messages = [
-          {
-            role: 'system',
-            content: '你是一个博客网站的助手，你可以自由调用JavaScript的API，然后以下是一些文章列表和ID你可以给',
-          },
-          {
-            role: 'system',
-            content: `解读用户需求【如果明确需要执行代码就不要输出其他文本】，你需要写JavaScript代码才能调用底层，你能调用的API不限于,你可以用run_js_code工具调用以下函数注意这里的函数是通过eval()调用需要你输出完整的调用链如baseAPIhandle.correctSong.handle('left')：${req.baseAPIHandler || ''}`,
-          },
-          { role: 'user', content: req.input_text },
-        ];
-      } else {
-        // 如果有传入的messages，确保最后一条是用户输入
-        const hasUserInput = messages.some(m => m.role === 'user' && m.content === req.input_text);
-        if (!hasUserInput) {
-          messages.push({ role: 'user', content: req.input_text });
-        }
+        messages = [{ role: 'user', content: req.input_text }];
       }
       
       console.log('Messages:', JSON.stringify(messages, null, 2));
@@ -128,28 +112,12 @@ export class LLMController {
   @Post('predict')
   async predict(@Body() req: PredictRequest) {
     try {
-      // 直接使用传入的messages，如果没有则使用默认的
+      // 直接使用传入的messages，不做任何修改
       let messages = req.messages || [];
       
-      // 如果没有传入messages，使用默认的系统消息
+      // 如果没有传入messages，创建一个简单的用户消息
       if (messages.length === 0) {
-        messages = [
-          {
-            role: 'system',
-            content: '你是一个博客网站的助手，你可以自由调用JavaScript的API，然后以下是一些文章列表和ID你可以给',
-          },
-          {
-            role: 'system',
-            content: `解读用户需求【如果明确需要执行代码就不要输出其他文本】，你需要写JavaScript代码才能调用底层，你能调用的API不限于,你可以用run_js_code工具调用以下函数注意这里的函数是通过eval()调用需要你输出完整的调用链如baseAPIhandle.correctSong.handle('left')：${req.baseAPIHandler || ''}`,
-          },
-          { role: 'user', content: req.input_text },
-        ];
-      } else {
-        // 如果有传入的messages，确保最后一条是用户输入
-        const hasUserInput = messages.some(m => m.role === 'user' && m.content === req.input_text);
-        if (!hasUserInput) {
-          messages.push({ role: 'user', content: req.input_text });
-        }
+        messages = [{ role: 'user', content: req.input_text }];
       }
 
       // 兼容old代码的简单调用方式

@@ -236,26 +236,19 @@ export class LLMService {
 
       this.logger.debug(`Using AI model: ${aiModelConfig.name} (${aiModelConfig.type})`);
 
-      // 使用传入的消息数组，如果没有则从应用配置获取
+      // 直接使用传入的消息数组，不做任何修改
       let messages = customMessages || [];
-      if (!customMessages && appConfigId) {
-        const appConfig = await this.appConfigRepository.findOne({
-          where: { id: appConfigId, isEnabled: true }
-        });
-        if (appConfig?.messages) {
-          messages = [...appConfig.messages];
-          this.logger.debug(`Using app config messages: ${appConfig.messages.length} messages`);
-        }
-      }
-
-      // 如果消息数组为空且没有用户输入，添加用户输入
-      if (messages.length === 0 || !messages.some(m => m.role === 'user')) {
-        messages.push({ role: 'user', content: safeText });
+      
+      // 如果消息数组为空，添加用户输入
+      if (messages.length === 0) {
+        messages = [{ role: 'user', content: safeText }];
       }
 
       // 构建工具配置
       const tools = this.buildDefaultTools(baseAPIHandler);
       const formattedTools = this.formatTools(tools);
+
+      this.logger.debug(`Using ${messages.length} messages and ${tools.length} tools`);
 
       const payload = {
         model: aiModelConfig.model,
@@ -376,26 +369,19 @@ export class LLMService {
 
       this.logger.debug(`Using AI model: ${aiModelConfig.name} (${aiModelConfig.type})`);
 
-      // 使用传入的消息数组，如果没有则从应用配置获取
+      // 直接使用传入的消息数组，不做任何修改
       let messages = customMessages || [];
-      if (!customMessages && appConfigId) {
-        const appConfig = await this.appConfigRepository.findOne({
-          where: { id: appConfigId, isEnabled: true }
-        });
-        if (appConfig?.messages) {
-          messages = [...appConfig.messages];
-          this.logger.debug(`Using app config messages: ${appConfig.messages.length} messages`);
-        }
-      }
-
-      // 如果消息数组为空且没有用户输入，添加用户输入
-      if (messages.length === 0 || !messages.some(m => m.role === 'user')) {
-        messages.push({ role: 'user', content: safeText });
+      
+      // 如果消息数组为空，添加用户输入
+      if (messages.length === 0) {
+        messages = [{ role: 'user', content: safeText }];
       }
 
       // 构建工具配置
       const tools = this.buildDefaultTools(baseAPIHandler);
       const formattedTools = this.formatTools(tools);
+
+      this.logger.debug(`Using ${messages.length} messages and ${tools.length} tools`);
 
       const payload = {
         model: aiModelConfig.model,
