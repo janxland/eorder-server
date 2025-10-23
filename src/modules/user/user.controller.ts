@@ -34,60 +34,53 @@ export class UserController {
   @Post()
   @UseGuards(PreviewGuard)
   @Roles('SUPER_ADMIN')
-  addUser(@Body() user: CreateUserDto) {
-    return this.userService.create(user);
+  create(@Body() createUserDto: CreateUserDto) {
+    return this.userService.create(createUserDto);
   }
 
   @Get()
   @Roles('SUPER_ADMIN')
-  getAllUsers(@Query() queryDto: GetUserDto) {
+  findAll(@Query() queryDto: GetUserDto) {
     return this.userService.findAll(queryDto);
-  }
-
-  @Post(':id/password')
-  @UseGuards(PreviewGuard)
-  @Roles('SUPER_ADMIN')
-  updatePwd(@Param('id') id: number, @Body() dto: UpdatePasswordDto) {
-    return this.userService.resetPassword(id, dto.password);
-  }
-
-  @Patch(':id')
-  @UseGuards(PreviewGuard)
-  @Roles('SUPER_ADMIN')
-  updateUser(@Param('id') id: number, @Body() user: UpdateUserDto) {
-    return this.userService.update(id, user);
-  }
-
-  @Delete(':id')
-  @UseGuards(PreviewGuard)
-  @Roles('SUPER_ADMIN')
-  deleteUser(@Param('id', ParseIntPipe) id: number) {
-    return this.userService.remove(id);
   }
 
   @Get(':id')
   @Roles('SUPER_ADMIN')
-  findOne(@Param('id') id: number) {
-    return this.userService.findUserProfile(id);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.userService.findOne(id);
   }
 
-  @Post(':id/roles')
-  @UseGuards(PreviewGuard)
+  @Patch(':id')
   @Roles('SUPER_ADMIN')
-  addUserRoles(@Param('id') id: number, @Body() dto: AddUserRolesDto) {
-    return this.userService.addRoles(id, dto.roleIds);
+  update(@Param('id', ParseIntPipe) id: number, @Body() updateUserDto: UpdateUserDto) {
+    return this.userService.update(id, updateUserDto);
   }
 
-  /**
-   * @desc 获取当前登录用户的详情信息
-   */
-  @Get('detail')
-  getUserInfo(@Request() req: any) {
-    const currentUser = req.user;
-    return this.userService.findUserDetail(currentUser.userId, currentUser.currentRoleCode);
+  @Delete(':id')
+  @Roles('SUPER_ADMIN')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.userService.remove(id);
   }
 
-  @Get('user/:username')
+  @Patch('password/:id')
+  @Roles('SUPER_ADMIN')
+  updatePassword(@Param('id', ParseIntPipe) id: number, @Body() updatePasswordDto: UpdatePasswordDto) {
+    return this.userService.updatePassword(id, updatePasswordDto);
+  }
+
+  @Post('roles/:id')
+  @Roles('SUPER_ADMIN')
+  addRoles(@Param('id', ParseIntPipe) id: number, @Body() addUserRolesDto: AddUserRolesDto) {
+    return this.userService.addRoles(id, addUserRolesDto.roleIds);
+  }
+
+  @Delete('roles/:id')
+  @Roles('SUPER_ADMIN')
+  removeRoles(@Param('id', ParseIntPipe) id: number, @Body() addUserRolesDto: AddUserRolesDto) {
+    return this.userService.removeRoles(id, addUserRolesDto.roleIds);
+  }
+
+  @Get('username/:username')
   @Roles('SUPER_ADMIN')
   findByUsername(@Param('username') username: string) {
     return this.userService.findByUsername(username);
@@ -107,25 +100,33 @@ export class UserController {
 
   // 更新用户的profile - PATCH方法
   @Patch('profile/:userId')
-  updateUserProfilePatch(@Param('userId') userId: number, @Body() profileDto: UpdateProfileDto, @Request() req: any) {
-    // 涉及隐私信息，只能本人或者超管更新
+  updateUserProfile(@Param('userId') userId: number, @Body() updateProfileDto: UpdateProfileDto, @Request() req: any) {
     const currentUser = req.user;
     // 只能本人或者超管更新
     if (currentUser.userId === userId || currentUser.roleCodes.includes('SUPER_ADMIN')) {
-      return this.userService.updateProfile(userId, profileDto);
+      return this.userService.updateUserProfile(userId, updateProfileDto);
     }
     throw new CustomException(ErrorCode.ERR_11003);
   }
 
-  // 更新用户的profile - PUT方法
-  @Put('profile/:userId')
-  updateUserProfilePut(@Param('userId') userId: number, @Body() profileDto: UpdateProfileDto, @Request() req: any) {
-    // 涉及隐私信息，只能本人或者超管更新
-    const currentUser = req.user;
-    // 只能本人或者超管更新
-    if (currentUser.userId === userId || currentUser.roleCodes.includes('SUPER_ADMIN')) {
-      return this.userService.updateProfile(userId, profileDto);
-    }
-    throw new CustomException(ErrorCode.ERR_11003);
+  // 新增：获取用户权限列表
+  @Get('permissions/:userId')
+  @Roles('SUPER_ADMIN')
+  getUserPermissions(@Param('userId', ParseIntPipe) userId: number) {
+    return this.userService.getUserPermissions(userId);
+  }
+
+  // 新增：获取用户角色权限树
+  @Get('role-permissions/:userId')
+  @Roles('SUPER_ADMIN')
+  getUserRolePermissions(@Param('userId', ParseIntPipe) userId: number) {
+    return this.userService.getUserRolePermissions(userId);
+  }
+
+  // 新增：更新用户权限
+  @Put('permissions/:userId')
+  @Roles('SUPER_ADMIN')
+  updateUserPermissions(@Param('userId', ParseIntPipe) userId: number, @Body() permissions: { permissionIds: number[] }) {
+    return this.userService.updateUserPermissions(userId, permissions.permissionIds);
   }
 }

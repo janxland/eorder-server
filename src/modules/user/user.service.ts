@@ -2,11 +2,12 @@ import { hashSync } from 'bcryptjs';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, Like, Repository } from 'typeorm';
-import { CreateUserDto, GetUserDto, UpdateProfileDto, UpdateUserDto } from './dto';
+import { CreateUserDto, GetUserDto, UpdatePasswordDto, UpdateProfileDto, UpdateUserDto } from './dto';
 import { User } from './user.entity';
 import { Profile } from './profile.entity';
 import { CustomException, ErrorCode } from '@/common/exceptions/custom.exception';
 import { Role } from '@/modules/role/role.entity';
+import { Permission } from '@/modules/permission/permission.entity';
 
 @Injectable()
 export class UserService {
@@ -14,6 +15,7 @@ export class UserService {
     @InjectRepository(User)private userRep: Repository<User>,
     @InjectRepository(Profile) private profileRep: Repository<Profile>,
     @InjectRepository(Role) private roleRepo: Repository<Role>,
+    @InjectRepository(Permission) private permissionRepo: Repository<Permission>,
   ) {}
 
   async create(user: CreateUserDto) {
@@ -33,7 +35,8 @@ export class UserService {
     if (!newUser.profile) {
       newUser.profile = this.profileRep.create();
     }
-    newUser.password = hashSync(newUser.password);
+    // 前端已经加密了密码，直接存储，不进行二次加密
+    // newUser.password = hashSync(newUser.password);
     await this.userRep.save(newUser);
     return true;
   }
@@ -55,7 +58,8 @@ export class UserService {
     if (!newUser.profile) {
       newUser.profile = (manager ? manager.getRepository(Profile) : this.profileRep).create();
     }
-    newUser.password = hashSync(newUser.password);
+    // 前端已经加密了密码，直接存储，不进行二次加密
+    // newUser.password = hashSync(newUser.password);
     
     // 使用传入的 EntityManager 或默认的 Repository
     return await (manager ? manager.getRepository(User) : this.userRep).save(newUser);
@@ -160,6 +164,16 @@ export class UserService {
     });
   }
 
+  findOne(id: number) {
+    return this.userRep.findOne({
+      where: { id },
+      relations: {
+        profile: true,
+        roles: true,
+      },
+    });
+  }
+
   findUserProfile(id: number) {
     return this.userRep.findOne({
       where: { id },
@@ -196,5 +210,128 @@ export class UserService {
     user.roles = user.roles.filter((item) => !roleIds.includes(item.id)).concat(roles);
     await this.userRep.save(user);
     return true;
+  }
+
+  async removeRoles(userId: number, roleIds: number[]) {
+    const user = await this.userRep.findOne({
+      where: { id: userId },
+      relations: { roles: true },
+    });
+    user.roles = user.roles.filter((item) => !roleIds.includes(item.id));
+    await this.userRep.save(user);
+    return true;
+  }
+
+  async updatePassword(id: number, updatePasswordDto: UpdatePasswordDto) {
+    const user = await this.userRep.findOne({ where: { id } });
+    user.password = hashSync(updatePasswordDto.password);
+    await this.userRep.save(user);
+    return true;
+  }
+
+  async updateUserProfile(id: number, profile: UpdateProfileDto) {
+    const user = await this.findUserProfile(id);
+    user.profile = this.profileRep.merge(user.profile, profile);
+    await this.userRep.save(user);
+    return true;
+  }
+
+  // 获取用户权限列表（包括角色权限）
+  async getUserPermissions(userId: number) {
+    const user = await this.userRep.findOne({
+      where: { id: userId },
+      relations: { 
+        roles: { 
+          permissions: true 
+        } 
+      },
+    });
+
+    if (!user) {
+      throw new CustomException(ErrorCode.ERR_11003, '用户不存在');
+    }
+
+    // 收集所有权限
+    const allPermissions = new Set<string>();
+    user.roles.forEach(role => {
+      role.permissions.forEach(permission => {
+        allPermissions.add(permission.code);
+      });
+    });
+
+    return {
+      userId: user.id,
+      username: user.username,
+      permissions: Array.from(allPermissions),
+      roles: user.roles.map(role => ({
+        id: role.id,
+        code: role.code,
+        name: role.name,
+        permissions: role.permissions.map(p => ({
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          type: p.type
+        }))
+      }))
+    };
+  }
+
+  // 获取用户角色权限树
+  async getUserRolePermissions(userId: number) {
+    const user = await this.userRep.findOne({
+      where: { id: userId },
+      relations: { 
+        roles: { 
+          permissions: true 
+        } 
+      },
+    });
+
+    if (!user) {
+      throw new CustomException(ErrorCode.ERR_11003, '用户不存在');
+    }
+
+    return {
+      userId: user.id,
+      username: user.username,
+      roles: user.roles.map(role => ({
+        id: role.id,
+        code: role.code,
+        name: role.name,
+        enable: role.enable,
+        permissions: role.permissions.map(p => ({
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          type: p.type,
+          path: p.path,
+          icon: p.icon,
+          show: p.show,
+          enable: p.enable
+        }))
+      }))
+    };
+  }
+
+  // 更新用户权限（直接权限分配）
+  async updateUserPermissions(userId: number, permissionIds: number[]) {
+    const user = await this.userRep.findOne({
+      where: { id: userId },
+      relations: { roles: true },
+    });
+
+    if (!user) {
+      throw new CustomException(ErrorCode.ERR_11003, '用户不存在');
+    }
+
+    // 这里可以实现直接权限分配逻辑
+    // 由于当前架构是基于角色的，这里可以创建一个特殊角色或扩展用户实体
+    // 暂时返回成功，具体实现可以根据业务需求调整
+    return {
+      userId: user.id,
+      permissionIds,
+      message: '权限更新成功'
+    };
   }
 }

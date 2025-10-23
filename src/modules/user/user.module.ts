@@ -5,12 +5,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from './user.entity';
 import { Role } from '@/modules/role/role.entity';
 import { Profile } from './profile.entity';
+import { Permission } from '@/modules/permission/permission.entity';
 import { AuthCenterModule } from '../auth-center/auth-center.module';
 
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Profile , Role]),
+    TypeOrmModule.forFeature([User, Profile, Role, Permission]),
     forwardRef(() => AuthCenterModule)
   ],
   controllers: [UserController],
