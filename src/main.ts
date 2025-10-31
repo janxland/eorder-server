@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as session from 'express-session';
+import * as cookieParser from 'cookie-parser';
 import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
@@ -27,6 +28,9 @@ async function bootstrap() {
     }),
   );
   
+  // 解析Cookie - SSO支持
+  app.use(cookieParser());
+  
   app.use(
     session({
       secret: 'isme',
@@ -38,8 +42,14 @@ async function bootstrap() {
     }),
   );
   
-  // 允许跨域请求
-  app.enableCors();
+  // 允许跨域请求 - SSO增强版
+  app.enableCors({
+    origin: true,  // 允许所有来源（生产环境建议配置具体域名）
+    credentials: true,  // 🔥 关键：允许携带Cookie
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Set-Cookie'],
+  });
   
   await app.listen(process.env.APP_PORT || 8085);
 
