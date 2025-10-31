@@ -43,11 +43,33 @@ async function bootstrap() {
   );
   
   // 允许跨域请求 - SSO增强版
+  // 🔥 重要：当 credentials: true 时，origin 不能是 *，必须返回具体的 origin 值
   app.enableCors({
-    origin: true,  // 允许所有来源（生产环境建议配置具体域名）
+    origin: (origin, callback) => {
+      // 如果没有 origin（例如同源请求或某些客户端），允许请求
+      if (!origin) {
+        return callback(null, true);
+      }
+      
+      // 允许所有 roginx.ink 子域
+      const allowedOrigins = [
+        /^https?:\/\/(.*\.)?roginx\.ink$/,
+        /^https?:\/\/localhost(:\d+)?$/,
+      ];
+      
+      const isAllowed = allowedOrigins.some(pattern => pattern.test(origin));
+      
+      if (isAllowed) {
+        // 🔥 关键：返回具体的 origin 值，而不是 true
+        callback(null, origin);
+      } else {
+        // 允许所有来源（生产环境建议配置具体域名白名单）
+        callback(null, origin);
+      }
+    },
     credentials: true,  // 🔥 关键：允许携带Cookie
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cookie'],
     exposedHeaders: ['Set-Cookie'],
   });
   
