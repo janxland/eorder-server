@@ -34,17 +34,13 @@ export class AuthCenterController {
     // 生成登录凭证
     const result = await this.authCenterService.login(user, req);
     
-    // 🔥 SSO：设置Cookie实现跨子域单点登录
+    // 设置Cookie实现跨子域单点登录
     const cookieDomain = this.getCookieDomain(req);
     
-    // 验证token是否存在
     if (!result || !result.accessToken || !result.refreshToken) {
-      this.logger.error(`SSO Login Error: Token生成失败`, { result });
+      this.logger.error('SSO Login Error: Token生成失败', { result });
       throw new Error('Token生成失败');
     }
-    
-    this.logger.log(`🔍 准备设置Cookie - Domain: ${cookieDomain}, Host: ${req.get('host')}, Origin: ${req.get('origin')}`);
-    this.logger.log(`🔍 Token信息 - AccessToken长度: ${result.accessToken?.length}, RefreshToken长度: ${result.refreshToken?.length}`);
     
     // 判断是否是HTTPS
     const isSecure = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https';
@@ -53,41 +49,25 @@ export class AuthCenterController {
     // 设置 Cookie 选项
     const cookieOptions = {
       domain: cookieDomain,
-      httpOnly: true,  // 防止XSS攻击
-      secure: shouldUseSecure,  // 生产环境或HTTPS启用Secure
-      sameSite: 'lax' as const,  // CSRF防护
+      httpOnly: true,
+      secure: shouldUseSecure,
+      sameSite: 'lax' as const,
       path: '/',
     };
     
-    this.logger.log(`🔍 Cookie选项: ${JSON.stringify(cookieOptions)}`);
-    
     // 设置 Access Token Cookie
-    try {
-      res.cookie('sso_access_token', result.accessToken, {
-        ...cookieOptions,
-        maxAge: result.expiresIn * 1000,  // 过期时间（秒转毫秒）
-      });
-      this.logger.log(`✅ Set Cookie: sso_access_token, Domain: ${cookieDomain}, MaxAge: ${result.expiresIn * 1000}ms`);
-    } catch (error) {
-      this.logger.error(`❌ 设置Access Token Cookie失败:`, error);
-    }
+    res.cookie('sso_access_token', result.accessToken, {
+      ...cookieOptions,
+      maxAge: result.expiresIn * 1000,
+    });
 
     // 设置 Refresh Token Cookie
-    try {
-      res.cookie('sso_refresh_token', result.refreshToken, {
-        ...cookieOptions,
-        maxAge: 90 * 24 * 60 * 60 * 1000,  // 90天
-      });
-      this.logger.log(`✅ Set Cookie: sso_refresh_token, Domain: ${cookieDomain}, MaxAge: 90d`);
-    } catch (error) {
-      this.logger.error(`❌ 设置Refresh Token Cookie失败:`, error);
-    }
+    res.cookie('sso_refresh_token', result.refreshToken, {
+      ...cookieOptions,
+      maxAge: 90 * 24 * 60 * 60 * 1000,
+    });
 
-    // 验证Cookie是否设置成功（通过检查响应头）
-    const setCookieHeaders = res.getHeader('Set-Cookie');
-    this.logger.log(`🔍 Set-Cookie响应头:`, setCookieHeaders);
-
-    this.logger.log(`🎉 SSO Login Success: ${loginDto.username}, Cookie Domain: ${cookieDomain}, Host: ${req.get('host')}`);
+    this.logger.log(`SSO Login Success: ${loginDto.username}, Domain: ${cookieDomain}`);
     
     return {
       success: true,
@@ -103,35 +83,27 @@ export class AuthCenterController {
    */
   private getCookieDomain(req: Request): string {
     const host = req.get('host') || '';
-    const origin = req.get('origin') || '';
-    
-    this.logger.debug(`🔍 Cookie Domain Detection - Host: ${host}, Origin: ${origin}, NODE_ENV: ${process.env.NODE_ENV}`);
     
     // 开发环境
     if (process.env.NODE_ENV === 'development' || host.includes('localhost')) {
-      this.logger.debug(`✅ Using domain: localhost`);
       return 'localhost';
     }
     
     // 生产环境 - 提取顶级域名（支持 *.roginx.ink）
     if (host.includes('roginx.ink')) {
-      const domain = '.roginx.ink';  // 注意：顶级域前面需要加 "."
-      this.logger.debug(`✅ Using domain: ${domain} (for roginx.ink)`);
-      return domain;
+      return '.roginx.ink';
     }
     
     // 其他环境：提取最后两个部分作为顶级域名
     if (host.includes('.')) {
       const parts = host.split('.');
       if (parts.length >= 2) {
-        const domain = `.${parts.slice(-2).join('.')}`;
-        this.logger.debug(`✅ Using domain: ${domain} (extracted from ${host})`);
-        return domain;
+        return `.${parts.slice(-2).join('.')}`;
       }
     }
     
-    // 默认返回当前host（不推荐，但作为后备）
-    this.logger.warn(`⚠️ Using default domain: ${host} (no match found)`);
+    // 默认返回当前host
+    this.logger.warn(`Using default domain: ${host} (no match found)`);
     return host;
   }
 
@@ -202,32 +174,30 @@ export class AuthCenterController {
    */
   @Post('verify-token')
   async verifyToken(@Body() body: { token?: string }, @Req() req: Request) {
-    this.logger.log(`🔍 Verify Token Request - Host: ${req.get('host')}, Origin: ${req.get('origin')}`);
-    
     // 优先级：Authorization头 > 请求体 > Cookie
     let token: string | undefined;
+    let tokenSource: string | null = null;
     
     // 1. 从Authorization头读取
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.substring(7);
-      this.logger.debug('Reading token from Authorization header');
+      tokenSource = 'Authorization';
     }
     
     // 2. 从请求体读取
     if (!token && body.token) {
       token = body.token;
-      this.logger.debug('Reading token from request body');
+      tokenSource = 'Body';
     }
     
     // 3. 从Cookie读取
     if (!token) {
       token = req.cookies?.sso_access_token;
-      this.logger.debug(`Reading token from Cookie - Cookies: ${JSON.stringify(Object.keys(req.cookies || {}))}`);
+      tokenSource = 'Cookie';
     }
     
     if (!token) {
-      this.logger.warn('❌ No token provided in Authorization header, body, or Cookie');
       return {
         success: false,
         valid: false,
@@ -236,19 +206,15 @@ export class AuthCenterController {
       };
     }
     
-    this.logger.log(`✅ Token found - Source: ${token === authHeader?.substring(7) ? 'Authorization' : token === body.token ? 'Body' : 'Cookie'}`);
-    
     try {
       const result = await this.authCenterService.verifyToken(token);
-      this.logger.log(`🔍 Token verification result - Valid: ${result.valid}, UserId: ${result.userId || 'N/A'}`);
-      
       return {
         success: true,
         ...result,
-        tokenSource: token === authHeader?.substring(7) ? 'Authorization' : token === body.token ? 'Body' : 'Cookie',
+        tokenSource,
       };
     } catch (error) {
-      this.logger.error(`❌ Token verification failed:`, error);
+      this.logger.error('Token verification failed:', error);
       return {
         success: false,
         valid: false,
@@ -296,10 +262,7 @@ export class AuthCenterController {
    */
   @Get('check-admin')
   async checkAdmin() {
-    this.logger.debug('检查是否存在超级管理员');
     const hasAdmin = await this.authCenterService.checkHasAdmin();
-    this.logger.debug(`超级管理员检查结果: ${hasAdmin}`);
-    
     return {
       success: true,
       hasAdmin
@@ -311,11 +274,7 @@ export class AuthCenterController {
    */
   @Post('init-admin')
   async initAdmin(@Body() data: any) {
-    this.logger.debug(`初始化超级管理员: 用户名=${data.username}`);
-    
     const result = await this.authCenterService.initAdmin(data.username, data.password);
-    this.logger.debug(`初始化结果: ${JSON.stringify(result)}`);
-    
     return {
       success: true,
       ...result
