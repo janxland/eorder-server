@@ -38,7 +38,14 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;  # 🔥 重要：告诉后端是HTTPS
+        # 🔥 重要：X-Forwarded-Host 告诉后端原始域名
+        # 如果 $host 是IP地址，使用 $http_host 或 $server_name
+        proxy_set_header X-Forwarded-Host $http_host;  # 使用客户端原始Host头
+        # 或者：proxy_set_header X-Forwarded-Host $server_name;  # 使用server_name
         proxy_set_header Origin $http_origin;
+        
+        # ❌ 重要：不要在这里设置固定的Host，这会覆盖上面的设置
+        # ❌ proxy_set_header Host 'roginx.ink';  # 错误！删除这行！
         
         # 🔥 关键：必须透传响应头，不要过滤Set-Cookie
         proxy_pass_header Set-Cookie;
@@ -70,7 +77,14 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;  # 🔥 HTTPS标志
+        # 🔥 重要：X-Forwarded-Host 告诉后端原始域名
+        # 如果 $host 是IP地址，使用 $http_host 或 $server_name
+        proxy_set_header X-Forwarded-Host $http_host;  # 使用客户端原始Host头
+        # 或者：proxy_set_header X-Forwarded-Host $server_name;  # 使用server_name
         proxy_set_header Origin $http_origin;
+        
+        # ❌ 重要：不要在这里设置固定的Host，这会覆盖上面的设置
+        # ❌ proxy_set_header Host 'roginx.ink';  # 错误！删除这行！
         
         # 🔥 关键：透传所有响应头，包括Set-Cookie和CORS头
         proxy_pass_header Set-Cookie;
@@ -122,13 +136,29 @@ sudo nginx -T | grep "server_name edu.roginx.ink" -A 20
 2. 检查两个域名是否在同一顶级域下（`edu.roginx.ink` 和 `www.roginx.ink`）
 3. 检查浏览器控制台是否有CORS错误
 
+### Q: 后端获取到的host是 `127.0.0.1` 而不是域名？
+**A**: 
+1. **删除重复的 `proxy_set_header Host`**：
+   - ❌ 错误：`proxy_set_header Host 'roginx.ink';` （在配置最后）
+   - ✅ 正确：只保留一个 `proxy_set_header Host $host;`
+
+2. **修复 `X-Forwarded-Host`**：
+   - ❌ 错误：`proxy_set_header X-Forwarded-Host $host;` （如果nginx的$host是IP地址）
+   - ✅ 正确：`proxy_set_header X-Forwarded-Host $http_host;` （使用客户端原始Host头）
+   - ✅ 或者：`proxy_set_header X-Forwarded-Host $server_name;` （使用server_name）
+
+3. **后端已经优化**：如果 `X-Forwarded-Host` 是IP地址，会从 `referer` 或 `origin` 头获取域名
+
 ## 📝 检查清单
 
 - [ ] nginx配置中没有 `add_header Access-Control-Allow-Origin *;`
 - [ ] nginx配置中有 `proxy_set_header X-Forwarded-Proto $scheme;`
+- [ ] nginx配置中有 `proxy_set_header X-Forwarded-Host $http_host;` 或 `$server_name`
+- [ ] **删除了重复的 `proxy_set_header Host 'roginx.ink';`**
 - [ ] nginx配置中有 `proxy_pass_header Set-Cookie;`
 - [ ] 后端服务已重启
-- [ ] nginx配置已重新加载
+- [ ] nginx配置已重新加载（`sudo nginx -t && sudo nginx -s reload`）
 - [ ] 浏览器Cookie已清除
 - [ ] 重新登录后检查响应头
+- [ ] 调用 `/auth-center/sso-config` 接口，确认 `currentHost` 是域名而不是IP地址
 
