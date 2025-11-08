@@ -8,7 +8,7 @@
 
 import { PartialType } from '@nestjs/mapped-types';
 import { Exclude } from 'class-transformer';
-import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEnum, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { MethodType, PermissionType } from '@/types';
 
 export class CreatePermissionDto {
@@ -18,8 +18,9 @@ export class CreatePermissionDto {
   @IsString()
   code: string;
 
-  @IsString()
-  type: PermissionType;
+  @IsEnum(['MENU', 'BUTTON', 'API'] as const)
+  @IsOptional()
+  type?: PermissionType;
 
   @IsNumber()
   @IsOptional()
@@ -49,7 +50,7 @@ export class CreatePermissionDto {
   @IsOptional()
   keepAlive?: boolean;
 
-  @IsString()
+  @IsEnum(['GET', 'POST', 'PATCH', 'DELETE'] as const)
   @IsOptional()
   method?: MethodType;
 
@@ -71,6 +72,7 @@ export class CreatePermissionDto {
 }
 
 export class UpdatePermissionDto extends PartialType(CreatePermissionDto) {
-  @Exclude()
-  type: PermissionType;
+  @IsEnum(['MENU', 'BUTTON', 'API'] as const)
+  @IsOptional()
+  type?: PermissionType;
 }
