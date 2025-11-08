@@ -91,4 +91,12 @@ export class PermissionController {
   validateMenuPath(@Query('path') path: string) {
     return this.permissionService.validateMenuPath(path);
   }
+
+  /* 修复所有空 type 的权限 */
+  @Post('fix-empty-types')
+  @UseGuards(PreviewGuard)
+  @Roles('SUPER_ADMIN')
+  fixEmptyTypes() {
+    return this.permissionService.fixEmptyTypes();
+  }
 }

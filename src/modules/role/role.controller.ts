@@ -89,7 +89,7 @@ export class RoleController {
   }
 
   @Get('permissions/tree')
-  @Roles('SUPER_ADMIN')
+  // 允许所有已登录用户获取自己角色的权限树
   findRolePermissionsTree(@Request() req: any) {
     return this.roleService.findRolePermissionsTree(req.user.currentRoleCode);
   }
