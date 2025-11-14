@@ -239,4 +239,13 @@ export class StorageConfigService {
 
     return config;
   }
+
+  /**
+   * 过滤掉敏感字段（用于列表查询等场景）
+   * 单独查询详情时会返回完整的信息
+   */
+  excludeSensitiveFields(config: StorageConfig): Omit<StorageConfig, 'accessKey' | 'secretKey'> & { accessKey?: undefined; secretKey?: undefined } {
+    const { accessKey, secretKey, ...rest } = config;
+    return rest as Omit<StorageConfig, 'accessKey' | 'secretKey'> & { accessKey?: undefined; secretKey?: undefined };
+  }
 } 

@@ -1,10 +1,6 @@
-/**********************************
- * @Author: Ronnie Zhang
- * @LastEditor: Ronnie Zhang
- * @LastEditTime: 2023/12/07 20:27:04
- * @Email: zclzone@outlook.com
- * Copyright © 2023 Ronnie Zhang(大脸怪) | https://isme.top
- **********************************/
+/**
+ * website: https://www.roginx.ink
+ */
 
 import {
   Controller,
@@ -29,7 +25,10 @@ import {
 } from './dto';
 import { PreviewGuard } from '@/common/guards';
 import { AuthCenterGuard } from '@/common/guards/auth-center.guard';
+import { PermissionCodeGuard } from '@/common/guards/permission-code.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
+import { RequirePermission } from '@/common/decorators/permission.decorator';
+import { PermissionCode } from '@/common/enums/permission-code.enum';
 
 @Controller('role')
 @UseGuards(AuthCenterGuard)
@@ -89,6 +88,8 @@ export class RoleController {
   }
 
   @Get('permissions/tree')
+  @UseGuards(PermissionCodeGuard)
+  @RequirePermission(PermissionCode.SHOW_ROLE_PERMISSIONS_TREE)
   // 允许所有已登录用户获取自己角色的权限树
   findRolePermissionsTree(@Request() req: any) {
     return this.roleService.findRolePermissionsTree(req.user.currentRoleCode);

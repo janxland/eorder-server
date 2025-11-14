@@ -209,4 +209,23 @@ export class AppConfigService {
     
     return defaultConfig;
   }
+
+  /**
+   * 过滤掉关联的AI模型配置中的敏感字段（用于列表查询等场景）
+   * 单独查询详情时会返回完整的信息
+   */
+  excludeSensitiveFields(config: AppConfig): AppConfig {
+    if (config.aiModelConfig) {
+      const { apiKey, apiSecret, ...restAIModelConfig } = config.aiModelConfig;
+      return {
+        ...config,
+        aiModelConfig: {
+          ...restAIModelConfig,
+          apiKey: undefined,
+          apiSecret: undefined,
+        } as AIModelConfig,
+      };
+    }
+    return config;
+  }
 } 

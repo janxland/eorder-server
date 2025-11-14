@@ -2,11 +2,13 @@ import { Body, Controller, Delete, Get, Post, Query, UseGuards, Req } from '@nes
 import { CloudStorageService } from './cloud-storage.service';
 import { UploadDto } from './dto/storage-config.dto';
 import { AuthCenterGuard } from '../../common/guards/auth-center.guard';
+import { PermissionCodeGuard } from '../../common/guards/permission-code.guard';
 import { StorageConfigService } from './storage-config.service';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/permission.decorator';
+import { PermissionCode } from '../../common/enums/permission-code.enum';
 
 @Controller('cloud-storage')
-@UseGuards(AuthCenterGuard)
+@UseGuards(AuthCenterGuard, PermissionCodeGuard)
 export class CloudStorageController {
   constructor(
     private readonly cloudStorageService: CloudStorageService,
@@ -17,7 +19,7 @@ export class CloudStorageController {
    * 获取上传凭证
    */
   @Post('token')
-  @Roles('SUPER_ADMIN')
+  @RequirePermission(PermissionCode.GET_UPLOAD_TOKEN)
   async getUploadToken(@Body() uploadDto: UploadDto, @Req() req: any) {
     const userId = req.user?.userId;
     const token = await this.cloudStorageService.getUploadToken(uploadDto, userId);
@@ -31,7 +33,7 @@ export class CloudStorageController {
    * 获取上传URL
    */
   @Get('upload-url')
-  @Roles('SUPER_ADMIN')
+  @RequirePermission(PermissionCode.GET_UPLOAD_URL)
   async getUploadUrl(@Query() uploadDto: UploadDto, @Req() req: any) {
     const userId = req.user?.userId;
     const url = await this.cloudStorageService.getUploadUrl(uploadDto, userId);
@@ -49,7 +51,7 @@ export class CloudStorageController {
    * @param prefix 文件路径前缀，例如：/upload/article/202405/
    */
   @Get('temp-credentials')
-  @Roles('SUPER_ADMIN')
+  @RequirePermission(PermissionCode.GET_TEMP_CREDENTIALS)
   async getTempCredentials(
     @Req() req: any,
     @Query('configId') configId?: number,
@@ -95,7 +97,7 @@ export class CloudStorageController {
    * 获取文件URL
    */
   @Get('file-url')
-  @Roles('SUPER_ADMIN')
+  @RequirePermission(PermissionCode.GET_FILE_URL)
   async getFileUrl(
     @Query('key') key: string,
     @Query('configId') configId: number | undefined,
@@ -113,7 +115,7 @@ export class CloudStorageController {
    * 删除文件
    */
   @Delete()
-  @Roles('SUPER_ADMIN')
+  @RequirePermission(PermissionCode.DELETE_FILE)
   async deleteFile(
     @Body('key') key: string,
     @Body('configId') configId: number | undefined,

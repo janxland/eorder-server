@@ -6,13 +6,20 @@ import {
   Header,
   HttpException,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { PredictRequest } from './predict.dto';
 import { LLMService } from './llm.service';
 import { Tools } from './tools';
+import { AuthCenterGuard } from '@/common/guards/auth-center.guard';
+import { PermissionCodeGuard } from '@/common/guards/permission-code.guard';
+import { RequirePermission } from '@/common/decorators/permission.decorator';
+import { PermissionCode } from '@/common/enums/permission-code.enum';
+import { Public } from '@/common/decorators/public.decorator';
 
 @Controller("/llm")
+@UseGuards(AuthCenterGuard, PermissionCodeGuard)
 export class LLMController {
   constructor(private readonly llmService: LLMService) {}
 
@@ -21,6 +28,7 @@ export class LLMController {
    * 通过 SSE (text/event-stream) 方式流式返回
    */
   @Post('predict_stream')
+  @Public()
   @Header('Content-Type', 'text/event-stream')
   @Header('Cache-Control', 'no-cache')
   async predictStream(@Body() req: PredictRequest, @Res() res: Response) {
@@ -64,6 +72,7 @@ export class LLMController {
    * 收集所有的流式片段，一次性返回 JSON
    */
   @Post('predict')
+  @Public()
   async predict(@Body() req: PredictRequest) {
     try {
       const response = await this.llmService.predictFull(req.input_text);

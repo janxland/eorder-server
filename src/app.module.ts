@@ -1,10 +1,6 @@
-/**********************************
- * @Author: Ronnie Zhang
- * @LastEditor: Ronnie Zhang
- * @LastEditTime: 2023/12/07 20:30:08
- * @Email: zclzone@outlook.com
- * Copyright © 2023 Ronnie Zhang(大脸怪) | https://isme.top
- **********************************/
+/**
+ * website: https://www.roginx.ink
+ */
 
 import { Module } from '@nestjs/common';
 import { SharedModule } from './shared/shared.module';
@@ -22,6 +18,7 @@ import { KeyValueModule } from './modules/jsonmap/key-value.module';
 import { CloudStorageModule } from './modules/cloud-storage/cloud-storage.module';
 import { AIModelModule } from './modules/ai-model/ai-model.module';
 import { LLMModule } from './modules/llm/llm.module';
+import { GrayReleaseModule } from './modules/gray-release/gray-release.module';
 
 @Module({
   imports: [
@@ -31,10 +28,10 @@ import { LLMModule } from './modules/llm/llm.module';
       envFilePath: ['.env.local', '.env'],
     }),
 
+    SharedModule, // 必须在前面，提供 RedisService
     UserModule,
-    PermissionModule,
+    PermissionModule, // 提供 PermissionCacheService
     RoleModule,
-    SharedModule,
     AuthCenterModule,
     KeyValueModule,
     SystemModule,
@@ -44,6 +41,7 @@ import { LLMModule } from './modules/llm/llm.module';
     CloudStorageModule,
     AIModelModule,
     LLMModule,
+    GrayReleaseModule,
   ],
 })
 export class AppModule {}

@@ -1,10 +1,6 @@
-/**********************************
- * @Author: Ronnie Zhang
- * @LastEditor: Ronnie Zhang
- * @LastEditTime: 2023/12/07 20:26:42
- * @Email: zclzone@outlook.com
- * Copyright © 2023 Ronnie Zhang(大脸怪) | https://isme.top
- **********************************/
+/**
+ * website: https://www.roginx.ink
+ */
 
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreatePermissionDto, UpdatePermissionDto } from './dto';
@@ -41,8 +37,56 @@ export class PermissionService {
     return this.permissionRepo.save(permissions);
   }
 
-  findAll() {
-    return this.permissionRepo.find({ order: { order: 'ASC' } });
+  async findAll(queryDto?: { name?: string; type?: string; enable?: boolean | string; page?: number | string; num?: number | string }) {
+    // 处理查询参数，转换类型
+    const name = queryDto?.name;
+    const type = queryDto?.type;
+    let enable: boolean | undefined = undefined;
+    if (queryDto?.enable !== undefined) {
+      enable = queryDto.enable === 'true' || queryDto.enable === true;
+    }
+    const page = queryDto?.page ? Number(queryDto.page) : 1;
+    const num = queryDto?.num ? Number(queryDto.num) : 10;
+    
+    let queryBuilder = this.permissionRepo.createQueryBuilder('permission');
+    
+    // 搜索条件
+    if (name) {
+      queryBuilder = queryBuilder.andWhere('permission.name LIKE :name', { name: `%${name}%` });
+    }
+    
+    if (type) {
+      queryBuilder = queryBuilder.andWhere('permission.type = :type', { type });
+    }
+    
+    if (enable !== undefined) {
+      queryBuilder = queryBuilder.andWhere('permission.enable = :enable', { enable });
+    }
+    
+    // 排序
+    queryBuilder = queryBuilder.orderBy('permission.order', 'ASC');
+    
+    // 获取总数
+    const totalCount = await queryBuilder.getCount();
+    
+    // 分页
+    const skip = (page - 1) * num;
+    queryBuilder = queryBuilder.skip(skip).take(num);
+    
+    // 获取数据
+    const data = await queryBuilder.getMany();
+    
+    // 计算总页数
+    const totalPage = Math.ceil(totalCount / num);
+    
+    return {
+      msg: '获取权限列表成功',
+      data,
+      totalPage,
+      totalCount,
+      page,
+      num
+    };
   }
 
   async findAllTree() {
