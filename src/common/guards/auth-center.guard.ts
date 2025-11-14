@@ -1,6 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, Logger, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthCenterService } from '@/modules/auth-center/auth-center.service';
+import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
 
 @Injectable()
 export class AuthCenterGuard implements CanActivate {
@@ -13,6 +14,15 @@ export class AuthCenterGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // 检查是否是公开接口
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) {
+      return true;
+    }
+
     const request = context.switchToHttp().getRequest();
     const token = this.extractTokenFromHeader(request);
     

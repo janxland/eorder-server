@@ -1,14 +1,20 @@
-import { Controller, Post, Body, Get, Query, HttpException, HttpStatus, Param ,Req} from '@nestjs/common';
+import { Controller, Post, Body, Get, Query, HttpException, HttpStatus, Param ,Req, UseGuards} from '@nestjs/common';
 import { ePayService } from './epay.service'; // 假设你已经在NestJS中创建了一个对应的service
 import { Order } from '../order/order.entity';
 import { RCode } from '@/constants/rcode';
 import { GetOrderDto } from '../order/dto';
+import { AuthCenterGuard } from '@/common/guards/auth-center.guard';
+import { PermissionCodeGuard } from '@/common/guards/permission-code.guard';
+import { RequirePermission } from '@/common/decorators/permission.decorator';
+import { PermissionCode } from '@/common/enums/permission-code.enum';
 
 @Controller('epay')
+@UseGuards(AuthCenterGuard, PermissionCodeGuard)
 export class ePayController {
   constructor(private readonly epayService: ePayService) {
   }
   @Get()
+  @RequirePermission(PermissionCode.SHOW_PAY_ORDER_LIST)
   getAll(@Query() queryDto: GetOrderDto){
       return this.epayService.findAll(queryDto);
   }
@@ -25,6 +31,7 @@ export class ePayController {
 
   // 获取支付链接
   @Post('getPayLink')
+  @RequirePermission(PermissionCode.GET_PAY_LINK)
   async getPayLink(@Body() payDto: any): Promise<string> {
     try {
       const result = this.epayService.getPayLink(payDto);
@@ -37,6 +44,7 @@ export class ePayController {
 
   // API支付
   @Post('createOrder')
+  @RequirePermission(PermissionCode.CREATE_PAY_ORDER)
   async apiPay(@Body() order,@Query() payDto: any,@Req() req): Promise<any> {
     try {
       console.log(order,payDto);
@@ -52,6 +60,7 @@ export class ePayController {
 
   // 订单完成/订单过期异步回调验证
   @Get('notify')
+  @RequirePermission(PermissionCode.VERIFY_PAY_NOTIFY)
   async verifyNotify(@Query() query: any): Promise<boolean> {
     try {
       const result = await this.epayService.verifyNotify(query);
@@ -67,6 +76,7 @@ export class ePayController {
 
   // 同步回调验证
   @Get('return')
+  @RequirePermission(PermissionCode.VERIFY_PAY_NOTIFY)
   async verifyReturn(@Query() query: any): Promise<boolean> {
     try {
       const result = await this.epayService.verifyReturn(query);
@@ -78,6 +88,7 @@ export class ePayController {
 
   // 查询订单支付状态
   @Get('query')
+  @RequirePermission(PermissionCode.QUERY_PAY_ORDER)
   async orderStatus(@Query('orderId',) orderId ,@Body() queryData: GetOrderDto) {
     if(orderId) {
       queryData.orderId = orderId;
@@ -91,6 +102,7 @@ export class ePayController {
   }
     // 查询订单支付状态
     @Get('queryone')
+    @RequirePermission(PermissionCode.QUERY_PAY_ORDER)
     async queryOne(@Query() queryData1: GetOrderDto,@Body() queryData2: GetOrderDto) {
       try {
         if(Object.keys(queryData1).length === 0) {
@@ -103,6 +115,7 @@ export class ePayController {
       }
     }
   @Get('select')
+  @RequirePermission(PermissionCode.SHOW_PAY_ORDER_LIST)
   async selectOrders(@Body() query: any): Promise<any> {
     try {
       const result = await this.epayService.selectOrders(query);
@@ -112,6 +125,7 @@ export class ePayController {
     }
   }  
   @Get('queryepayorder')
+  @RequirePermission(PermissionCode.QUERY_PAY_ORDER)
   async queryOrder(@Query('trade_no') tradeNo: string): Promise<any> {
     try {
       const result = await this.epayService.queryOrder(tradeNo);

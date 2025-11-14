@@ -1,10 +1,6 @@
-/**********************************
- * @Author: Ronnie Zhang
- * @LastEditor: Ronnie Zhang
- * @LastEditTime: 2023/12/07 20:24:36
- * @Email: zclzone@outlook.com
- * Copyright © 2023 Ronnie Zhang(大脸怪) | https://isme.top
- **********************************/
+/**
+ * website: https://www.roginx.ink
+ */
 
 type ValueOf<T> = T[keyof T];
 

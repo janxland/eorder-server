@@ -3,72 +3,83 @@ import { AIModelConfigService } from './ai-model-config.service';
 import { CreateAIModelConfigDto, UpdateAIModelConfigDto, TestAIModelConfigDto } from './dto/ai-model-config.dto';
 import { AIModelConfig } from './entities/ai-model-config.entity';
 import { AuthCenterGuard } from '../../common/guards/auth-center.guard';
+import { PermissionCodeGuard } from '../../common/guards/permission-code.guard';
+import { RequirePermission } from '../../common/decorators/permission.decorator';
+import { PermissionCode } from '../../common/enums/permission-code.enum';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 @Controller('ai-model-config')
-// @UseGuards(AuthCenterGuard)
+@UseGuards(AuthCenterGuard, PermissionCodeGuard)
 export class AIModelConfigController {
   constructor(private readonly aiModelConfigService: AIModelConfigService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @Roles('SUPER_ADMIN')
+  @RequirePermission(PermissionCode.CREATE_AI_MODEL_CONFIG)
   async create(@Body() createDto: CreateAIModelConfigDto): Promise<any> {
     const config = await this.aiModelConfigService.create(createDto);
-    return config;
+    // 创建后返回时也过滤 apiKey（除非是超级管理员）
+    return this.aiModelConfigService.excludeApiKey(config);
   }
 
   @Get()
-  @Roles('SUPER_ADMIN')
+  @RequirePermission(PermissionCode.SHOW_AI_MODEL_CONFIG_LIST)
   async findAll(): Promise<any> {
     const configs = await this.aiModelConfigService.findAll();
-    return configs;
+    // 列表查询时过滤 apiKey
+    return configs.map(config => this.aiModelConfigService.excludeApiKey(config));
   }
 
   @Get('default')
-  @Roles('SUPER_ADMIN')
+  @RequirePermission(PermissionCode.SHOW_AI_MODEL_CONFIG_LIST)
   async findDefault(): Promise<any> {
     const config = await this.aiModelConfigService.findDefault();
-    return config;
+    // 默认配置查询时也过滤 apiKey
+    return this.aiModelConfigService.excludeApiKey(config);
   }
 
   @Get(':id')
-  @Roles('SUPER_ADMIN')
+  @Public()
   async findOne(@Param('id') id: string): Promise<any> {
+    // 单独查询时返回完整的 apiKey
     const config = await this.aiModelConfigService.findOne(+id);
     return config;
   }
 
   @Put(':id')
-  @Roles('SUPER_ADMIN')
+  @RequirePermission(PermissionCode.UPDATE_AI_MODEL_CONFIG)
   async update(@Param('id') id: string, @Body() updateDto: UpdateAIModelConfigDto): Promise<any> {
     const config = await this.aiModelConfigService.update(+id, updateDto);
-    return config;
+    // 更新后返回时也过滤 apiKey
+    return this.aiModelConfigService.excludeApiKey(config);
   }
 
   @Delete(':id')
-  @Roles('SUPER_ADMIN')
+  @RequirePermission(PermissionCode.DELETE_AI_MODEL_CONFIG)
   async remove(@Param('id') id: string): Promise<any> {
     await this.aiModelConfigService.remove(+id);
     return { success: true };
   }
 
   @Put(':id/default')
-  @Roles('SUPER_ADMIN')
+  @RequirePermission(PermissionCode.UPDATE_AI_MODEL_CONFIG)
   async setDefault(@Param('id') id: string): Promise<any> {
     const config = await this.aiModelConfigService.setDefault(+id);
-    return config;
+    // 设置默认后返回时也过滤 apiKey
+    return this.aiModelConfigService.excludeApiKey(config);
   }
 
   @Put(':id/status')
-  @Roles('SUPER_ADMIN')
+  @RequirePermission(PermissionCode.UPDATE_AI_MODEL_CONFIG)
   async changeStatus(@Param('id') id: string, @Body('isEnabled') isEnabled: boolean): Promise<any> {
     const config = await this.aiModelConfigService.changeStatus(+id, isEnabled);
-    return config;
+    // 修改状态后返回时也过滤 apiKey
+    return this.aiModelConfigService.excludeApiKey(config);
   }
 
   @Post('test-connection')
-  @Roles('SUPER_ADMIN')
+  @RequirePermission(PermissionCode.SHOW_AI_MODEL_CONFIG_DETAIL)
   async testConnection(@Body() testDto: TestAIModelConfigDto): Promise<any> {
     const result = await this.aiModelConfigService.testConnection(testDto);
     return result;

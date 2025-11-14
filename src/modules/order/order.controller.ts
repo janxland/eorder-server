@@ -10,11 +10,13 @@ import {
 import { OrderService } from './order.service';
 import { Order } from './order.entity';
 import { AuthCenterGuard } from '@/common/guards/auth-center.guard';
-import { Roles } from '@/common/decorators/roles.decorator';
+import { PermissionCodeGuard } from '@/common/guards/permission-code.guard';
+import { RequirePermission } from '@/common/decorators/permission.decorator';
+import { PermissionCode } from '@/common/enums/permission-code.enum';
 
 const allowedIps = ['YOUR_ALLOWED_IPS']; // 配置允许的IP列表
 @Controller('orderss')
-@UseGuards(AuthCenterGuard)
+@UseGuards(AuthCenterGuard, PermissionCodeGuard)
 export class OrderController {
   constructor(private readonly orderService: OrderService) {
       console.log('OrderController instantiated');
@@ -43,10 +45,12 @@ export class OrderController {
    * @returns 返回订单查询结果
    */
   @Get('/query')
+  @RequirePermission(PermissionCode.QUERY_ORDER)
   queryOrder(@Query('out_trade_no') out_trade_no: string,@Query('orderId') orderId) {
     return this.orderService.queryOrder(out_trade_no || orderId);
   }
   @Post('/select')
+  @RequirePermission(PermissionCode.SHOW_ORDER_LIST)
   selectOrders(@Body() selectOrders: Partial<Order>,@Query('num') num: number,@Query('page') page: number) {
     return this.orderService.selectOrders(selectOrders,num,page);
   }
@@ -57,6 +61,7 @@ export class OrderController {
    * @returns 返回保存订单的结果（通常是保存后的订单对象或保存状态）
    */
   @Post('/createOrder')
+  @RequirePermission(PermissionCode.CREATE_ORDER)
   saveOrder(@Body() order,@Req() req) {
     order.IPAddress = req.ip || req.connection.remoteAddress;
     return this.orderService.createOrder(order);
@@ -69,6 +74,7 @@ export class OrderController {
    * @returns 
   */
   @Get('/list')
+  @RequirePermission(PermissionCode.SHOW_ORDER_LIST)
   listOrders(@Query('orderIds') orderIds: string,@Query('num') num: number,@Query('page') page: number){
     return this.orderService.listOrders(orderIds,num,page);
   }
@@ -80,11 +86,13 @@ export class OrderController {
    * @param orderId 订单ID，通过查询参数传递
    * @returns 返回订单信息
    */
+  @RequirePermission(PermissionCode.SHOW_ORDER_DETAIL)
   getOrder(@Query('orderId') orderId: string) {
     return this.orderService.getOrder(orderId);
   }
 
   @Post('/update')
+  @RequirePermission(PermissionCode.UPDATE_ORDER)
   saveOne(@Body() order) {
     return this.orderService.saveOne(order);
   }

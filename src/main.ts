@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import * as session from 'express-session';
 import * as cookieParser from 'cookie-parser';
 import { ValidationPipe } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -73,6 +74,23 @@ async function bootstrap() {
     exposedHeaders: ['Set-Cookie'],
   });
   
+  // Swagger OpenAPI 文档
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('eorder-server API')
+    .setDescription('eorder-server 接口文档')
+    .setVersion('1.0.0')
+    // 使用 Cookie 认证（会话：isme.session）
+    .addCookieAuth('isme.session')
+    .build();
+  const openApiDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, openApiDocument, {
+    swaggerOptions: { persistAuthorization: true },
+  });
+  // 原始 OpenAPI JSON，供移动端/跨端项目直接消费
+  app.getHttpAdapter().get('/openapi-json', (req, res) => {
+    res.json(openApiDocument);
+  });
+
   await app.listen(process.env.APP_PORT || 8085);
 
   console.log(`🚀 启动成功: http://localhost:${process.env.APP_PORT}`);

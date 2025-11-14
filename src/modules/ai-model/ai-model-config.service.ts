@@ -153,4 +153,13 @@ export class AIModelConfigService {
   private async resetDefaultStatus(): Promise<void> {
     await this.aiModelConfigRepository.update({}, { isDefault: false });
   }
+
+  /**
+   * 过滤掉敏感字段（apiKey 和 apiSecret）（用于列表查询等场景）
+   * 单独查询详情时会返回完整的信息
+   */
+  excludeApiKey(config: AIModelConfig): Omit<AIModelConfig, 'apiKey' | 'apiSecret'> & { apiKey?: undefined; apiSecret?: undefined } {
+    const { apiKey, apiSecret, ...rest } = config;
+    return rest as Omit<AIModelConfig, 'apiKey' | 'apiSecret'> & { apiKey?: undefined; apiSecret?: undefined };
+  }
 } 

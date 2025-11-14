@@ -1,10 +1,6 @@
-/**********************************
- * @Author: Ronnie Zhang
- * @LastEditor: Ronnie Zhang
- * @LastEditTime: 2023/12/07 20:26:16
- * @Email: zclzone@outlook.com
- * Copyright © 2023 Ronnie Zhang(大脸怪) | https://isme.top
- **********************************/
+/**
+ * website: https://www.roginx.ink
+ */
 
 import { PartialType } from '@nestjs/mapped-types';
 import { Exclude } from 'class-transformer';
@@ -75,4 +71,23 @@ export class UpdatePermissionDto extends PartialType(CreatePermissionDto) {
   @IsEnum(['MENU', 'BUTTON', 'API'] as const)
   @IsOptional()
   type?: PermissionType;
+}
+
+export class GetPermissionDto {
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsEnum(['MENU', 'BUTTON', 'API'] as const)
+  @IsOptional()
+  type?: PermissionType;
+
+  @IsOptional()
+  enable?: boolean | string;
+
+  @IsOptional()
+  page?: number | string;
+
+  @IsOptional()
+  num?: number | string;
 }
