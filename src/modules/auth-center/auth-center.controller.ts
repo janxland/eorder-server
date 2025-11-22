@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post, Req, Res, UseGuards, Logger
 import { AuthCenterService } from './auth-center.service';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { AuthCenterGuard } from '../../common/guards/auth-center.guard';
 import { Request, Response } from 'express';
 
@@ -26,6 +27,7 @@ export class AuthCenterController {
     
     if (!user) {
       return {
+        code: 401,
         success: false,
         message: '用户名或密码错误'
       };
@@ -74,10 +76,14 @@ export class AuthCenterController {
     this.logger.log(`SSO Login Success: ${loginDto.username}, Domain: ${cookieDomain}`);
     
     return {
+      code: 200,
+      message: '登录成功',
       success: true,
-      ...result,
-      ssoEnabled: true,
-      cookieDomain,
+      data: {
+        ...result,
+        ssoEnabled: true,
+        cookieDomain,
+      }
     };
   }
 
@@ -341,6 +347,21 @@ export class AuthCenterController {
         }
       };
     }
+  }
+
+  /**
+   * 获取用户资料
+   */
+  @Get('profile')
+  @UseGuards(AuthCenterGuard)
+  async getProfile(@Req() req: any) {
+    const userId = req.user?.userId;
+    const profile = await this.authCenterService.getUserProfile(userId);
+    return {
+      code: 200,
+      success: true,
+      data: profile
+    };
   }
 
   /**
