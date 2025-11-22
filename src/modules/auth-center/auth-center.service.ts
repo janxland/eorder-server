@@ -36,6 +36,61 @@ export class AuthCenterService {
   ) {}
 
   /**
+   * 用户注册
+   */
+  async register(username: string, password: string, email?: string) {
+    this.logger.debug(`尝试注册用户: ${username}`);
+    
+    // 检查用户名是否已存在
+    const existingUser = await this.userService.findByUsername(username);
+    if (existingUser) {
+      throw new CustomException(ErrorCode.ERR_11001); // 用户已存在
+    }
+    
+    // 创建新用户
+    const user = new User();
+    user.username = username;
+    user.password = password; // 直接存储密码，与现有系统保持一致
+    user.enable = true;
+    
+    // 如果提供了邮箱，创建用户资料
+    if (email) {
+      user.profile = {
+        email: email,
+        nickname: username,
+        avatar: null,
+        phone: null,
+        address: null,
+        birthday: null,
+        gender: null,
+        bio: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      } as any;
+    }
+    
+    // 查找默认角色（如果有的话）
+    const defaultRole = await this.roleRepository.findOne({
+      where: { code: 'user' } // 假设有一个默认的user角色
+    });
+    
+    if (defaultRole) {
+      user.roles = [defaultRole];
+    }
+    
+    // 保存用户
+    const savedUser = await this.userRepository.save(user);
+    
+    this.logger.debug(`用户注册成功: ${username}, ID: ${savedUser.id}`);
+    
+    return {
+      userId: savedUser.id,
+      username: savedUser.username,
+      message: '注册成功'
+    };
+  }
+
+  /**
    * 验证用户凭据
    */
   async validateUser(username: string, password: string) {
@@ -65,17 +120,13 @@ export class AuthCenterService {
 
   /**
    * 用户登录
+   * SSO模式：即使用户没有启用的角色，也允许登录并生成token
+   * 具体权限检查由各个应用自行处理
    */
   async login(user: any, req: any) {
-    // 判断用户是否有enable属性为true的角色
-    if (!user.roles?.some((item) => item.enable)) {
-      throw new CustomException(ErrorCode.ERR_11003);
-    }
-
-    const roleCodes = user.roles?.map((item) => item.code);
-    const currentRole = user.roles[0];
+    const roleCodes = user.roles?.filter((item) => item.enable).map((item) => item.code) || [];
+    const currentRole = user.roles?.find((item) => item.enable) || { code: 'guest' };
     
-    // 生成Token对
     const tokens = await this.generateTokens({
       userId: user.id,
       username: user.username,
