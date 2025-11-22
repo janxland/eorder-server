@@ -70,8 +70,8 @@ async function bootstrap() {
     },
     credentials: true,  // 🔥 关键：允许携带Cookie
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cookie'],
-    exposedHeaders: ['Set-Cookie'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cookie', 'Cache-Control', 'Accept', 'Accept-Language', 'Accept-Encoding'],
+    exposedHeaders: ['Set-Cookie', 'Cache-Control', 'Content-Length', 'Content-Type'],
   });
   
   // Swagger OpenAPI 文档
