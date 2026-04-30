@@ -6,6 +6,7 @@
  * 2. 先查询已存在的权限，了解需要哪些字段
  * 3. 更新已存在权限的中文名称，使其与 PermissionCodeMap 保持一致
  * 4. 确保所有权限的 type 都是 API
+ * 5. 将指定权限码绑定到「超级管理员」角色（role.code = SUPER_ADMIN），便于权限表与后台 UI 展示一致
  * 
  * 使用方法：
  * npm run script:insert-permissions
@@ -316,6 +317,53 @@ async function main() {
             [parentId, code]
           );
           console.log(`  ✅ 更新父级权限: ${code} -> parentId: ${parentId}`);
+        }
+      }
+    }
+
+    // 11. 将「需在 DB 中显式归属超级管理员」的权限码写入 role_permissions_permission
+    console.log('\n正在同步超级管理员角色权限绑定...');
+    const superAdminRows = (await queryRunner.query(
+      'SELECT id FROM role WHERE code = ? LIMIT 1',
+      ['SUPER_ADMIN'],
+    )) as { id: number }[];
+
+    if (superAdminRows.length === 0) {
+      console.log('  ⚠️  未找到角色 SUPER_ADMIN，跳过角色权限绑定');
+    } else {
+      const superAdminId = superAdminRows[0].id;
+      /** 入库后需自动分给超级管理员的权限（后端 Guard 已对 SUPER_ADMIN 放行，此处用于库表与前端权限列表一致） */
+      const grantToSuperAdmin: PermissionCode[] = [
+        PermissionCode.ISSUE_CDN_SCRIPT_LICENSE,
+      ];
+
+      for (const code of grantToSuperAdmin) {
+        const permRows = (await queryRunner.query(
+          'SELECT id FROM permission WHERE code = ? LIMIT 1',
+          [code],
+        )) as { id: number }[];
+
+        if (permRows.length === 0) {
+          console.log(`  ⚠️  权限尚未入库，跳过绑定: ${code}`);
+          continue;
+        }
+
+        const permissionId = permRows[0].id;
+        const existingLink = (await queryRunner.query(
+          'SELECT 1 FROM role_permissions_permission WHERE roleId = ? AND permissionId = ? LIMIT 1',
+          [superAdminId, permissionId],
+        )) as unknown[];
+
+        if (existingLink.length === 0) {
+          await queryRunner.query(
+            'INSERT INTO role_permissions_permission (roleId, permissionId) VALUES (?, ?)',
+            [superAdminId, permissionId],
+          );
+          console.log(
+            `  ✅ 已为超级管理员绑定权限: ${code} (roleId=${superAdminId}, permissionId=${permissionId})`,
+          );
+        } else {
+          console.log(`  ⏭️  超级管理员已拥有权限: ${code}`);
         }
       }
     }

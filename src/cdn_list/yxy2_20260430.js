@@ -1,18 +1,15 @@
 /**
- * 易班形策（二）自动答题 — 收藏夹（Bookmarklet）用法
+ * 易班形策（二）自动答题 — 收藏夹（Bookmarklet）
  *
- * 本仓库文件名：yxy2_20260430.js；后端公开路径与主文件名一致（不含 .js）：
- *    https://edu.roginx.ink/api/cdn-script/yxy2_20260430
- * 安装书签（小白向落地页，可拖入收藏栏 / 一键复制）：
- *    https://edu.roginx.ink/api/cdn-script/landing
+ * 需设备授权：后端用主密钥 CDN_MASTER_SECRET（默认 JANXLAND）对「设备指纹:脚本主名」做 HMAC-SHA256 生成 64 位十六进制密钥；
+ * 用户将指纹发给管理员，管理员调 POST /api/cdn-script/license/admin/issue 获取密钥下发。
  *
- * 新建浏览器书签，「网址」填入下面整行（与上面 base 一致，按日期/版本换 yxy2_20260430 段即可）：
+ * 脚本：    https://edu.roginx.ink/api/cdn-script/yxy2_20260430
+ * 落地页：  https://edu.roginx.ink/api/cdn-script/landing
+ * 校验接口：POST .../api/cdn-script/license/verify
  *
+ * 书签（整行）：
  * javascript:(function(){var u='https://edu.roginx.ink/api/cdn-script/yxy2_20260430';var s=document.createElement('script');s.charset='utf-8';s.src=u+(/\?/.test(u)?'&':'?')+'_='+Date.now();(document.body||document.head||document.documentElement).appendChild(s);void 0;})();
- *
- * 在易班考试页面打开试卷后，点击该书签即可向当前页注入本脚本并自动选题。
- *
- * 说明：题库体积大，须外链加载；若站点 CSP 禁止外链脚本，可改用 Tampermonkey 或本仓库 eorder-server 的 cdn-script 接口拉取同文件。
  */
 
 var arrs = {
@@ -7216,8 +7213,8 @@ var arrs = {
   "showAnswer": true,
   "reviewStatus": 1
 };
-// 根据 DOM 自动答题（bookmarklet 外链加载时在同一页面执行）
-(function runXingce2AutoAnswer() {
+// 根据 DOM 自动答题；需设备指纹 + 许可证（与 learning 页 / 管理端签发一致）
+function runXingce2AutoAnswer() {
     if (window.__XINGCE2_AUTO_ANSWER_DONE) {
         console.warn('形策（二）自动答题已执行过；如需重跑请先刷新页面。');
         return;
@@ -7300,4 +7297,71 @@ var arrs = {
             console.warn(`题目 ${index + 1}: 未知的题目类型 ${question.type}`);
         }
     });
+}
+(function cdnLicenseGateYxy2() {
+    var __CDN_BASE = 'yxy2_20260430';
+    var __VERIFY = 'https://edu.roginx.ink/api/cdn-script/license/verify';
+    var __LS = 'roginx_cdn_license:' + __CDN_BASE;
+    function loadScript(src) {
+        return new Promise(function (resolve, reject) {
+            var s = document.createElement('script');
+            s.async = true;
+            s.onload = resolve;
+            s.onerror = function () {
+                reject(new Error('无法加载设备指纹脚本'));
+            };
+            s.src = src;
+            document.head.appendChild(s);
+        });
+    }
+    loadScript('https://openfpcdn.io/fingerprintjs/v4/iife.min.js')
+        .then(function () {
+            if (typeof FingerprintJS === 'undefined') {
+                throw new Error('FingerprintJS 未定义');
+            }
+            return FingerprintJS.load();
+        })
+        .then(function (fp) {
+            return fp.get();
+        })
+        .then(function (result) {
+            var fpId = result.visitorId;
+            var key = null;
+            try {
+                key = localStorage.getItem(__LS);
+            } catch (e) {}
+            if (!key) {
+                key = (window.prompt('请输入本脚本授权密钥（管理员根据设备指纹签发）') || '').trim();
+            }
+            if (!key) {
+                console.warn('形策（二）：未输入授权密钥');
+                return;
+            }
+            return fetch(__VERIFY, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fingerprint: fpId,
+                    licenseKey: key,
+                    baseName: __CDN_BASE,
+                }),
+            }).then(function (res) {
+                if (res.ok) return res.json();
+                return res.json().then(function (j) {
+                    var m =
+                        (j && j.message) ||
+                        (j && j.data && j.data.message) ||
+                        '授权失败';
+                    throw new Error(typeof m === 'string' ? m : '授权失败');
+                });
+            }).then(function () {
+                try {
+                    localStorage.setItem(__LS, key);
+                } catch (e2) {}
+                runXingce2AutoAnswer();
+            });
+        })
+        .catch(function (err) {
+            console.error('形策（二）授权：', err);
+        });
 })();
