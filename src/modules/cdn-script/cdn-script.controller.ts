@@ -1,39 +1,71 @@
 /**
- * 跨域公开脚本：URL 路径与 cdn_list 下文件名对应（不含 .js）。
- * 落地页 GET .../landing 供用户安装 bookmarklet。
+ * 跨域公开脚本、落地页、设备 + 许可证校验（可扩展多脚本 baseName）
  * website: https://www.roginx.ink
  */
 
-import { Controller, Get, Header, Param, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Header,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Public } from '@/common/decorators/public.decorator';
 import { ReturnType } from '@/common/decorators/return-type.decorator';
 import { renderBookmarkLandingHtml } from './bookmark-landing';
 import { CdnScriptService } from './cdn-script.service';
+import { CdnScriptLicenseService } from './cdn-script-license.service';
+import { LicenseAdminIssueBodyDto, LicenseVerifyBodyDto } from './dto/license.dto';
+import { AuthCenterGuard } from '@/common/guards/auth-center.guard';
+import { PermissionCodeGuard } from '@/common/guards/permission-code.guard';
+import { RequirePermission } from '@/common/decorators/permission.decorator';
+import { PermissionCode } from '@/common/enums/permission-code.enum';
 
 @Controller(['cdn-script', 'api/cdn-script'])
 export class CdnScriptController {
   constructor(
     private readonly cdnScriptService: CdnScriptService,
+    private readonly cdnScriptLicenseService: CdnScriptLicenseService,
     private readonly configService: ConfigService,
   ) {}
 
-  /**
-   * 书签安装落地页（须写在动态段 :baseName 之前，避免被当成脚本名）
-   * 环境变量 BOOKMARKLET_SCRIPT_URL 可覆盖默认脚本地址。
-   * 查询参数 ?url= 可临时指定（限 http/https 完整 URL）
-   */
   @Get('landing')
   @Public()
   @ReturnType('primitive')
   @Header('Content-Type', 'text/html; charset=utf-8')
   @Header('Cache-Control', 'public, max-age=120')
-  getLandingPage(@Query('url') urlOverride?: string): string {
+  getLandingPage(
+    @Query('url') urlOverride?: string,
+    @Query('base') baseOverride?: string,
+  ): string {
     const defaultUrl =
       'https://edu.roginx.ink/api/cdn-script/yxy2_20260430';
     const fromEnv = this.configService.get<string>('BOOKMARKLET_SCRIPT_URL');
     const scriptUrl = this.pickScriptUrl(urlOverride, fromEnv, defaultUrl);
-    return renderBookmarkLandingHtml(scriptUrl);
+    const publicOrigin = this.configService.get<string>(
+      'CDN_PUBLIC_ORIGIN',
+      'https://edu.roginx.ink',
+    );
+    return renderBookmarkLandingHtml({
+      scriptUrl,
+      scriptBaseName: baseOverride || this.extractBaseNameFromUrl(scriptUrl),
+      publicApiOrigin: publicOrigin,
+    });
+  }
+
+  private extractBaseNameFromUrl(scriptUrl: string): string {
+    try {
+      const u = new URL(scriptUrl);
+      const last = u.pathname.split('/').filter(Boolean).pop() || '';
+      return last.replace(/\.js$/i, '') || 'yxy2_20260430';
+    } catch {
+      return 'yxy2_20260430';
+    }
   }
 
   private pickScriptUrl(
@@ -61,8 +93,38 @@ export class CdnScriptController {
   }
 
   /**
-   * 例：仓库文件 src/cdn_list/yxy2_20260430.js → GET .../yxy2_20260430
+   * 设备端校验：考试页 script 与 learning 页均调用
    */
+  @Post('license/verify')
+  @Public()
+  @ReturnType('primitive')
+  postVerifyLicense(@Body() body: LicenseVerifyBodyDto) {
+    this.cdnScriptLicenseService.assertLicenseValid(
+      body.fingerprint,
+      body.baseName,
+      body.licenseKey,
+    );
+    return { valid: true, baseName: body.baseName };
+  }
+
+  /**
+   * 管理后台：凭用户提供的指纹 + 脚本主名，生成可下发的许可证密钥
+   */
+  @Post('license/admin/issue')
+  @UseGuards(AuthCenterGuard, PermissionCodeGuard)
+  @RequirePermission(PermissionCode.ISSUE_CDN_SCRIPT_LICENSE)
+  @ReturnType('primitive')
+  postAdminIssueLicense(@Body() body: LicenseAdminIssueBodyDto) {
+    if (!body.fingerprint || !body.baseName) {
+      throw new BadRequestException('缺少 fingerprint 或 baseName');
+    }
+    const licenseKey = this.cdnScriptLicenseService.deriveLicenseKey(
+      body.fingerprint.trim(),
+      body.baseName.trim(),
+    );
+    return { licenseKey, baseName: body.baseName.trim() };
+  }
+
   @Get(':baseName')
   @Public()
   @ReturnType('primitive')

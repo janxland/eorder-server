@@ -208,6 +208,10 @@ export enum PermissionCode {
   BATCH_DELETE_GRAY_RELEASE = 'BATCH_DELETE_GRAY_RELEASE',
   /** 清理应用灰度白名单 */
   CLEAR_APP_GRAY_RELEASE = 'CLEAR_APP_GRAY_RELEASE',
+
+  // ==================== CDN 脚本授权 ====================
+  /** 根据设备指纹与脚本名签发 CDN 许可证密钥（管理后台） */
+  ISSUE_CDN_SCRIPT_LICENSE = 'ISSUE_CDN_SCRIPT_LICENSE',
 }
 
 /**
@@ -331,6 +335,8 @@ export const PermissionCodeMap: Record<PermissionCode, string> = {
   [PermissionCode.BATCH_BIND_GRAY_RELEASE]: '批量绑定灰度白名单',
   [PermissionCode.BATCH_DELETE_GRAY_RELEASE]: '批量删除灰度白名单',
   [PermissionCode.CLEAR_APP_GRAY_RELEASE]: '清理应用灰度白名单',
+
+  [PermissionCode.ISSUE_CDN_SCRIPT_LICENSE]: '签发 CDN 脚本许可证密钥',
 };
 
 /**
