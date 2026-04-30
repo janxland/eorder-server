@@ -19,6 +19,7 @@ import { CloudStorageModule } from './modules/cloud-storage/cloud-storage.module
 import { AIModelModule } from './modules/ai-model/ai-model.module';
 import { LLMModule } from './modules/llm/llm.module';
 import { GrayReleaseModule } from './modules/gray-release/gray-release.module';
+import { CdnScriptModule } from './modules/cdn-script/cdn-script.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { GrayReleaseModule } from './modules/gray-release/gray-release.module';
     AIModelModule,
     LLMModule,
     GrayReleaseModule,
+    CdnScriptModule,
   ],
 })
 export class AppModule {}
