@@ -46,6 +46,13 @@ export class RefreshToken {
   @Column({ nullable: true })
   ipAddress: string;
 
+  /**
+   * 登录来源域名（host，含端口，例如 admin.roginx.ink、localhost:9000）
+   * 取自登录请求的 Origin / Referer / Host 头，便于审计区分子站点。
+   */
+  @Column({ length: 255, nullable: true })
+  origin: string;
+
   /** 解析后的设备友好名（如：Chrome on Windows） */
   @Column({ length: 128, nullable: true })
   deviceName: string;

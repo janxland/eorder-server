@@ -21,6 +21,12 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
   });
   t = step('NestFactory.create 完成 (含 TypeORM + Redis 连接 + 所有 Module init)', t);
+
+  // 启用 trust proxy：让 Express 解析 X-Forwarded-For，使 req.ip 返回真实客户端 IP
+  // 部署时 Nginx 必须设置：
+  //   proxy_set_header X-Real-IP $remote_addr;
+  //   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  app.getHttpAdapter().getInstance().set('trust proxy', true);
   
   // 配置极度宽松的验证管道
   app.useGlobalPipes(

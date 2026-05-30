@@ -1,9 +1,10 @@
-import { Body, Controller, Delete, Get, Param, Post, Req, Res, UseGuards, Logger, UsePipes, ValidationPipe, Header, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Req, Res, UseGuards, Logger, UsePipes, ValidationPipe, Header, NotFoundException } from '@nestjs/common';
 import { AuthCenterService } from './auth-center.service';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { AuthCenterGuard } from '../../common/guards/auth-center.guard';
+import { AdminGuard } from '../../common/guards/admin.guard';
 import { Request, Response } from 'express';
 
 @Controller('auth-center')
@@ -420,17 +421,12 @@ export class AuthCenterController {
    * 更新多设备登录配置（仅 SUPER_ADMIN）
    */
   @Post('sessions-config')
-  @UseGuards(AuthCenterGuard)
+  @UseGuards(AuthCenterGuard, AdminGuard)
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   async updateSessionsConfig(
-    @Req() req: any,
+    @Req() _req: any,
     @Body() body: { maxSessions?: number; evictionPolicy?: 'fifo' | 'lru' },
   ) {
-    const roles: string[] = req.user?.roleCodes ?? [];
-    if (!roles.includes('SUPER_ADMIN') && !roles.includes('admin')) {
-      throw new ForbiddenException('权限不足');
-    }
-
     const tasks: Array<Promise<any>> = [];
     if (body?.maxSessions != null) {
       tasks.push(this.authCenterService.setMaxSessions(body.maxSessions));
@@ -463,22 +459,13 @@ export class AuthCenterController {
   //              管理员视角：跨用户会话管理（新增）
   // ============================================================
 
-  /** 校验 SUPER_ADMIN / admin 权限，否则抛 403 */
-  private assertAdmin(req: any) {
-    const roles: string[] = req.user?.roleCodes ?? [];
-    if (!roles.includes('SUPER_ADMIN') && !roles.includes('admin')) {
-      throw new ForbiddenException('权限不足');
-    }
-  }
-
   /** 管理员：列出所有有活跃会话的用户（带数量统计） */
   @Get('admin/sessions/users')
-  @UseGuards(AuthCenterGuard)
+  @UseGuards(AuthCenterGuard, AdminGuard)
   async adminListUsersWithSessions(
     @Req() req: any,
     @Body() _body: any, // 占位，避免被 ValidationPipe 警告
   ) {
-    this.assertAdmin(req);
     const keyword = (req.query?.keyword as string) || '';
     const page = Number.parseInt(req.query?.page, 10) || 1;
     const pageSize = Number.parseInt(req.query?.pageSize, 10) || 20;
@@ -487,9 +474,8 @@ export class AuthCenterController {
 
   /** 管理员：平铺列出所有活跃会话（带用户详细信息），支持模糊搜索 */
   @Get('admin/sessions')
-  @UseGuards(AuthCenterGuard)
+  @UseGuards(AuthCenterGuard, AdminGuard)
   async adminListAllSessions(@Req() req: any) {
-    this.assertAdmin(req);
     const keyword = (req.query?.keyword as string) || '';
     const page = Number.parseInt(req.query?.page, 10) || 1;
     const pageSize = Number.parseInt(req.query?.pageSize, 10) || 20;
@@ -498,9 +484,8 @@ export class AuthCenterController {
 
   /** 管理员：查看任意用户的活跃会话列表 */
   @Get('admin/users/:userId/sessions')
-  @UseGuards(AuthCenterGuard)
-  async adminListUserSessions(@Req() req: any, @Param('userId') userId: string) {
-    this.assertAdmin(req);
+  @UseGuards(AuthCenterGuard, AdminGuard)
+  async adminListUserSessions(@Req() _req: any, @Param('userId') userId: string) {
     const uid = Number.parseInt(userId, 10);
     if (!Number.isFinite(uid)) throw new NotFoundException('用户不存在');
     const sessions = await this.authCenterService.getUserActiveSessions(uid);
@@ -509,9 +494,8 @@ export class AuthCenterController {
 
   /** 管理员：强制下线任意会话（无 userId 校验） */
   @Delete('admin/sessions/:sessionId')
-  @UseGuards(AuthCenterGuard)
-  async adminRevokeSession(@Req() req: any, @Param('sessionId') sessionId: string) {
-    this.assertAdmin(req);
+  @UseGuards(AuthCenterGuard, AdminGuard)
+  async adminRevokeSession(@Req() _req: any, @Param('sessionId') sessionId: string) {
     if (!sessionId || sessionId === 'null' || sessionId === 'undefined') {
       throw new NotFoundException('会话ID无效');
     }
@@ -522,9 +506,8 @@ export class AuthCenterController {
 
   /** 管理员：一键下线指定用户的全部会话 */
   @Post('admin/users/:userId/sessions/revoke-all')
-  @UseGuards(AuthCenterGuard)
-  async adminRevokeAllUserSessions(@Req() req: any, @Param('userId') userId: string) {
-    this.assertAdmin(req);
+  @UseGuards(AuthCenterGuard, AdminGuard)
+  async adminRevokeAllUserSessions(@Req() _req: any, @Param('userId') userId: string) {
     const uid = Number.parseInt(userId, 10);
     if (!Number.isFinite(uid)) throw new NotFoundException('用户不存在');
     const revoked = await this.authCenterService.revokeOtherSessions(uid);
