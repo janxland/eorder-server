@@ -9,15 +9,20 @@ import {
   Controller,
   Get,
   Header,
+  NotFoundException,
   Param,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { Public } from '@/common/decorators/public.decorator';
 import { ReturnType } from '@/common/decorators/return-type.decorator';
+import { CDN_LANDING_ROUTE_KEYS } from './cdn-landing-route-keys';
 import { renderBookmarkLandingHtml } from './bookmark-landing';
+import { resolvePublicApiOrigin } from './public-api-origin';
 import { CdnScriptService } from './cdn-script.service';
 import { CdnScriptLicenseService } from './cdn-script-license.service';
 import { LicenseAdminIssueBodyDto, LicenseVerifyBodyDto } from './dto/license.dto';
@@ -40,21 +45,46 @@ export class CdnScriptController {
   @Header('Content-Type', 'text/html; charset=utf-8')
   @Header('Cache-Control', 'public, max-age=120')
   getLandingPage(
+    @Req() req: Request,
     @Query('url') urlOverride?: string,
     @Query('base') baseOverride?: string,
   ): string {
-    const defaultUrl =
-      'https://edu.roginx.ink/api/cdn-script/yxy2_20260430';
+    const origin = resolvePublicApiOrigin(req, this.configService);
+    const defaultUrl = `${origin}/api/cdn-script/yxy2_20260430`;
     const fromEnv = this.configService.get<string>('BOOKMARKLET_SCRIPT_URL');
     const scriptUrl = this.pickScriptUrl(urlOverride, fromEnv, defaultUrl);
-    const publicOrigin = this.configService.get<string>(
-      'CDN_PUBLIC_ORIGIN',
-      'https://edu.roginx.ink',
-    );
     return renderBookmarkLandingHtml({
       scriptUrl,
       scriptBaseName: baseOverride || this.extractBaseNameFromUrl(scriptUrl),
-      publicApiOrigin: publicOrigin,
+      publicApiOrigin: origin,
+    });
+  }
+
+  /**
+   * 短链落地页：枚举键 → cdn_list 脚本（便于收藏夹 URL 缩短）
+   * 例：GET /api/cdn-script/landing/pa
+   */
+  @Get('landing/:shortKey')
+  @Public()
+  @ReturnType('primitive')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  @Header('Cache-Control', 'public, max-age=120')
+  getLandingPageByShortKey(
+    @Req() req: Request,
+    @Param('shortKey') shortKey: string,
+  ): string {
+    const key = (shortKey || '').trim().toLowerCase();
+    const entry = CDN_LANDING_ROUTE_KEYS[key];
+    if (!entry) {
+      throw new NotFoundException(`未知的落地页短链: ${shortKey}`);
+    }
+    const origin = resolvePublicApiOrigin(req, this.configService);
+    const scriptUrl = `${origin}/api/cdn-script/${encodeURIComponent(entry.scriptBaseName)}`;
+    return renderBookmarkLandingHtml({
+      scriptUrl,
+      scriptBaseName: entry.scriptBaseName,
+      publicApiOrigin: origin,
+      bookmarkLabel: entry.bookmarkLabel,
     });
   }
 
