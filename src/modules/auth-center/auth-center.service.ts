@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan } from 'typeorm';
+import { In, Repository, MoreThan, Not, IsNull } from 'typeorm';
 import { compareSync } from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { RefreshToken } from './entities/refresh-token.entity';
@@ -10,17 +10,42 @@ import { RedisService } from '@/shared/redis.service';
 import { CustomException, ErrorCode } from '@/common/exceptions/custom.exception';
 import { ConfigService } from '@nestjs/config';
 import { User } from '@/modules/user/user.entity';
+import { Profile } from '@/modules/user/profile.entity';
 import { Role } from '@/modules/role/role.entity';
 import * as bcrypt from 'bcryptjs';
+import { DeviceParser } from './utils/device-parser.util';
+import {
+  FifoSessionLimitPolicy,
+  LruSessionLimitPolicy,
+  SessionLimitPolicy,
+} from './session/session-limit.policy';
 
 @Injectable()
 export class AuthCenterService {
-  // Access Token过期时间（3小时）
+  // Access Token过期时间（6小时）
   private readonly ACCESS_TOKEN_EXPIRATION = 60 * 60 * 6;
   // Refresh Token过期时间（3个月）
   private readonly REFRESH_TOKEN_EXPIRATION = 90 * 24 * 60 * 60;
 
+  // === 多端会话相关常量 ===
+  /** 默认最大并发会话数 */
+  private readonly DEFAULT_MAX_SESSIONS = 3;
+  /** 允许配置的会话上限范围 */
+  private readonly MIN_SESSIONS = 1;
+  private readonly MAX_SESSIONS_LIMIT = 20;
+  /** Redis 配置 key：最大并发会话数 */
+  private readonly KEY_MAX_SESSIONS = 'auth:config:max_sessions';
+  /** Redis 配置 key：驱逐策略（fifo|lru） */
+  private readonly KEY_EVICTION_POLICY = 'auth:config:eviction_policy';
+
+  /** 策略注册表（策略模式 + 工厂） */
+  private readonly policyRegistry: Record<string, SessionLimitPolicy> = {
+    fifo: new FifoSessionLimitPolicy(),
+    lru: new LruSessionLimitPolicy(),
+  };
+
   private readonly logger = new Logger(AuthCenterService.name);
+
 
   constructor(
     private jwtService: JwtService,
@@ -139,48 +164,65 @@ export class AuthCenterService {
 
   /**
    * 生成Access Token和Refresh Token
+   * 多端会话：每次登录创建独立 sessionId，超过上限则按策略驱逐最旧会话
    */
   async generateTokens(payload: any, req?: any) {
-    // 生成Access Token
-    const accessToken = this.jwtService.sign(payload, {
+    const userAgent = req?.headers?.['user-agent'];
+    const ipAddress = req?.ip;
+
+    // 1. 同设备幂等：若已有活跃会话来自完全相同的 userAgent + ip，
+    //    视为"同一物理设备的重复登录"，撤销旧会话后再创建新会话，
+    //    避免同一浏览器反复打开登录页导致会话数虚高。
+    if (userAgent) {
+      await this.revokeSessionsForSameDevice(payload.userId, userAgent, ipAddress);
+    }
+
+    // 2. 在新建会话之前先执行驱逐策略（限制并发设备数）
+    await this.enforceSessionLimit(payload.userId);
+
+    // 3. 创建会话标识
+    const sessionId = uuidv4();
+    const deviceName = DeviceParser.parse(userAgent);
+    const now = new Date();
+
+    // 4. 生成 Access Token（携带 sid 用于会话隔离）
+    const tokenPayload = { ...payload, sid: sessionId };
+    const accessToken = this.jwtService.sign(tokenPayload, {
       expiresIn: this.ACCESS_TOKEN_EXPIRATION,
     });
 
-    // 生成Refresh Token
+    // 5. 生成 Refresh Token
     const refreshToken = uuidv4();
-    
-    // 计算过期时间
-    const expiresAt = new Date();
-    expiresAt.setSeconds(expiresAt.getSeconds() + this.REFRESH_TOKEN_EXPIRATION);
+    const expiresAt = new Date(now.getTime() + this.REFRESH_TOKEN_EXPIRATION * 1000);
 
-    // 保存Refresh Token到数据库
-    await this.refreshTokenRepository.save({
-      token: refreshToken,
-      expiresAt,
-      userId: payload.userId,
-      userAgent: req?.headers['user-agent'],
-      ipAddress: req?.ip,
-    });
-
-    // 将Access Token保存到Redis，便于快速验证和撤销
-    // 使用userId作为key的一部分，方便按用户撤销
-    const tokenKey = `auth:access_token:${payload.userId}`;
-    await this.redisService.set(
-      tokenKey,
-      accessToken,
-      this.ACCESS_TOKEN_EXPIRATION,
-    );
-
-    // 记录用户最后活跃时间
-    await this.redisService.set(
-      `auth:last_active:${payload.userId}`,
-      new Date().toISOString(),
-      this.REFRESH_TOKEN_EXPIRATION,
-    );
+    // 6. 并行写入：DB（refresh token） + Redis（access token & last_active）
+    await Promise.all([
+      this.refreshTokenRepository.save({
+        token: refreshToken,
+        sessionId,
+        expiresAt,
+        userId: payload.userId,
+        userAgent,
+        ipAddress,
+        deviceName,
+        lastActiveAt: now,
+      }),
+      this.redisService.set(
+        this.accessTokenKey(payload.userId, sessionId),
+        accessToken,
+        this.ACCESS_TOKEN_EXPIRATION,
+      ),
+      this.redisService.set(
+        `auth:last_active:${payload.userId}`,
+        now.toISOString(),
+        this.REFRESH_TOKEN_EXPIRATION,
+      ),
+    ]);
 
     return {
       accessToken,
       refreshToken,
+      sessionId,
       expiresIn: this.ACCESS_TOKEN_EXPIRATION,
       tokenType: 'Bearer',
       userId: payload.userId,
@@ -220,35 +262,44 @@ export class AuthCenterService {
     const roleCodes = user.roles?.map((item) => item.code);
     const currentRole = user.roles.find(role => role.enable) || user.roles[0];
 
+    // 沿用原 sessionId（保持会话连续性）
+    const sessionId = refreshTokenEntity.sessionId || uuidv4();
+    const now = new Date();
+
     // 生成新的Access Token，但保留原有的Refresh Token
     const accessToken = this.jwtService.sign({
       userId: user.id,
       username: user.username,
       roleCodes,
       currentRoleCode: currentRole.code,
+      sid: sessionId,
     }, {
       expiresIn: this.ACCESS_TOKEN_EXPIRATION,
     });
 
-    // 将Access Token保存到Redis，便于快速验证和撤销
-    const tokenKey = `auth:access_token:${user.id}`;
-    await this.redisService.set(
-      tokenKey,
-      accessToken,
-      this.ACCESS_TOKEN_EXPIRATION,
-    );
+    // 同步新 token、活跃时间（并行）
+    refreshTokenEntity.lastActiveAt = now;
+    if (!refreshTokenEntity.sessionId) {
+      refreshTokenEntity.sessionId = sessionId;
+    }
+    await Promise.all([
+      this.redisService.set(
+        this.accessTokenKey(user.id, sessionId),
+        accessToken,
+        this.ACCESS_TOKEN_EXPIRATION,
+      ),
+      this.refreshTokenRepository.save(refreshTokenEntity),
+      this.redisService.set(
+        `auth:last_active:${user.id}`,
+        now.toISOString(),
+        this.REFRESH_TOKEN_EXPIRATION,
+      ),
+    ]);
 
-    // 更新最后活跃时间
-    await this.redisService.set(
-      `auth:last_active:${user.id}`,
-      new Date().toISOString(),
-      this.REFRESH_TOKEN_EXPIRATION,
-    );
-
-    // 返回新的Access Token和原有的Refresh Token
     return {
       accessToken,
-      refreshToken: refreshTokenString, // 返回原有的Refresh Token
+      refreshToken: refreshTokenString,
+      sessionId,
       expiresIn: this.ACCESS_TOKEN_EXPIRATION,
       tokenType: 'Bearer',
       userId: user.id,
@@ -323,81 +374,449 @@ export class AuthCenterService {
   }
 
   /**
-   * 撤销用户的所有Token
+   * 撤销用户的所有Token（所有设备登出）
    */
   async revokeAllUserTokens(userId: number) {
-    // 撤销数据库中的所有Refresh Token
-    await this.refreshTokenRepository.update(
-      { userId, isRevoked: false },
-      { isRevoked: true }
+    // 找出所有未撤销会话，逐一清理 Redis
+    const sessions = await this.refreshTokenRepository.find({
+      where: { userId, isRevoked: false },
+      select: ['id', 'sessionId'],
+    });
+
+    await Promise.all(
+      sessions
+        .filter((s) => !!s.sessionId)
+        .map((s) => this.redisService.del(this.accessTokenKey(userId, s.sessionId))),
     );
 
-    // 从Redis中删除Access Token
+    // 兼容旧版用户级 key
     await this.redisService.del(`auth:access_token:${userId}`);
+
+    // 数据库批量撤销
+    await this.refreshTokenRepository.update(
+      { userId, isRevoked: false },
+      { isRevoked: true },
+    );
 
     return true;
   }
 
   /**
-   * 撤销特定的Refresh Token
+   * 撤销特定的Refresh Token（当前设备登出）
    */
   async revokeRefreshToken(refreshTokenString: string) {
-    const result = await this.refreshTokenRepository.update(
-      { token: refreshTokenString },
-      { isRevoked: true }
-    );
-    
-    if (result.affected > 0) {
-      const token = await this.refreshTokenRepository.findOne({
-        where: { token: refreshTokenString }
-      });
-      
-      if (token) {
-        // 同时删除Redis中的Access Token
-        await this.redisService.del(`auth:access_token:${token.userId}`);
-      }
-      
-      return true;
+    const token = await this.refreshTokenRepository.findOne({
+      where: { token: refreshTokenString },
+    });
+    if (!token) return false;
+
+    token.isRevoked = true;
+    await this.refreshTokenRepository.save(token);
+
+    if (token.sessionId) {
+      await this.redisService.del(this.accessTokenKey(token.userId, token.sessionId));
+    } else {
+      // 兼容旧数据
+      await this.redisService.del(`auth:access_token:${token.userId}`);
     }
-    
-    return false;
+    return true;
   }
 
   /**
-   * 验证Access Token
+   * 验证Access Token：基于 sid 做会话级匹配
    */
   async validateAccessToken(token: string) {
     try {
-      // 解析Token
       const payload = this.jwtService.verify(token);
-      
-      // 从Redis获取存储的Token
-      const storedToken = await this.redisService.get(`auth:access_token:${payload.userId}`);
-      
-      // 验证Token是否匹配
-      if (token !== storedToken) {
-        return null;
+
+      // 旧版 token 没有 sid，强制重登（避免单点共享 key 的安全风险）
+      if (!payload.sid) {
+        // 软兼容：仍然按旧 key 比对一次，方便平滑升级期内已登录的用户
+        const legacy = await this.redisService.get(`auth:access_token:${payload.userId}`);
+        return legacy && legacy === token ? payload : null;
       }
-      
+
+      const stored = await this.redisService.get(
+        this.accessTokenKey(payload.userId, payload.sid),
+      );
+      if (token !== stored) return null;
       return payload;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
 
   /**
-   * 获取用户的所有活跃会话
+   * 获取用户的所有活跃会话（按创建时间倒序）
    */
-  async getUserActiveSessions(userId: number) {
-    const currentDate = new Date();
-    return this.refreshTokenRepository.find({
+  async getUserActiveSessions(userId: number, currentSessionId?: string) {
+    const sessions = await this.refreshTokenRepository.find({
       where: {
         userId,
         isRevoked: false,
-        expiresAt: MoreThan(currentDate),
+        expiresAt: MoreThan(new Date()),
+        // 过滤掉旧版无 sessionId 的脏数据，避免前端拿到 null 拼出
+        // /sessions/null 这种坏 URL
+        sessionId: Not(IsNull()),
       },
-      select: ['id', 'userAgent', 'ipAddress', 'createdAt', 'expiresAt'],
+      select: [
+        'id',
+        'sessionId',
+        'userAgent',
+        'ipAddress',
+        'deviceName',
+        'createdAt',
+        'expiresAt',
+        'lastActiveAt',
+      ],
+      order: { createdAt: 'DESC' },
     });
+
+    return sessions.map((s) => ({
+      id: s.id,
+      sessionId: s.sessionId,
+      deviceName: s.deviceName || DeviceParser.parse(s.userAgent),
+      userAgent: s.userAgent,
+      ipAddress: s.ipAddress,
+      createdAt: s.createdAt,
+      expiresAt: s.expiresAt,
+      lastActiveAt: s.lastActiveAt ?? s.createdAt,
+      isCurrent: !!currentSessionId && s.sessionId === currentSessionId,
+    }));
+  }
+
+  /**
+   * 管理员视角：分页/搜索查询当前有活跃会话的用户列表
+   * 返回 [{ userId, username, nickname, sessionCount, lastActiveAt }]
+   */
+  async listUsersWithActiveSessions(params: {
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const { keyword = '', page = 1, pageSize = 20 } = params || {};
+    const safePage = Math.max(1, Number(page) || 1);
+    const safeSize = Math.min(100, Math.max(1, Number(pageSize) || 20));
+
+    // 先聚合得到 userId -> count / lastActive
+    const qb = this.refreshTokenRepository
+      .createQueryBuilder('rt')
+      .select('rt.userId', 'userId')
+      .addSelect('COUNT(rt.id)', 'sessionCount')
+      .addSelect('MAX(rt.lastActiveAt)', 'lastActiveAt')
+      .where('rt.isRevoked = :revoked', { revoked: false })
+      .andWhere('rt.expiresAt > :now', { now: new Date() })
+      .andWhere('rt.sessionId IS NOT NULL')
+      .groupBy('rt.userId')
+      .orderBy('lastActiveAt', 'DESC');
+
+    const aggregates = await qb.getRawMany<{
+      userId: number;
+      sessionCount: string;
+      lastActiveAt: Date | null;
+    }>();
+    if (aggregates.length === 0) {
+      return { list: [], total: 0, page: safePage, pageSize: safeSize };
+    }
+
+    // 关联用户信息（一次性 IN 查询）
+    const userIds = aggregates.map((a) => Number(a.userId));
+    const users = await this.userRepository.find({
+      where: { id: In(userIds) },
+      select: ['id', 'username'] as any,
+    });
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    // 合并 + 关键字过滤（用户名/昵称/userId）
+    const kw = keyword.trim().toLowerCase();
+    const merged = aggregates
+      .map((a) => {
+        const u = userMap.get(Number(a.userId));
+        return {
+          userId: Number(a.userId),
+          username: u?.username || '',
+          sessionCount: Number(a.sessionCount),
+          lastActiveAt: a.lastActiveAt,
+        };
+      })
+      .filter((row) => {
+        if (!kw) return true;
+        return (
+          String(row.userId).includes(kw) ||
+          row.username.toLowerCase().includes(kw)
+        );
+      });
+
+    const total = merged.length;
+    const list = merged.slice((safePage - 1) * safeSize, safePage * safeSize);
+    return { list, total, page: safePage, pageSize: safeSize };
+  }
+
+  /**
+   * 管理员视角：平铺列出所有活跃会话，附带用户详细信息
+   * 支持按 username / nickname / userId / IP / 设备 / sessionId 模糊检索
+   */
+  async listAllActiveSessions(params: {
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const { keyword = '', page = 1, pageSize = 20 } = params || {};
+    const safePage = Math.max(1, Number(page) || 1);
+    const safeSize = Math.min(100, Math.max(1, Number(pageSize) || 20));
+
+    const qb = this.refreshTokenRepository
+      .createQueryBuilder('rt')
+      .innerJoin(User, 'u', 'u.id = rt.userId')
+      .leftJoin(Profile, 'p', 'p.userId = rt.userId')
+      .select([
+        'rt.id AS id',
+        'rt.sessionId AS sessionId',
+        'rt.userId AS userId',
+        'rt.userAgent AS userAgent',
+        'rt.ipAddress AS ipAddress',
+        'rt.deviceName AS deviceName',
+        'rt.createdAt AS createdAt',
+        'rt.expiresAt AS expiresAt',
+        'rt.lastActiveAt AS lastActiveAt',
+        'u.username AS username',
+        'u.enable AS userEnable',
+        'p.nickName AS nickName',
+        'p.avatar AS avatar',
+        'p.email AS email',
+      ])
+      .where('rt.isRevoked = :revoked', { revoked: false })
+      .andWhere('rt.expiresAt > :now', { now: new Date() })
+      .andWhere('rt.sessionId IS NOT NULL');
+
+    const kw = keyword.trim();
+    if (kw) {
+      qb.andWhere(
+        `(u.username LIKE :kw OR p.nickName LIKE :kw OR rt.ipAddress LIKE :kw
+          OR rt.deviceName LIKE :kw OR rt.sessionId LIKE :kw OR CAST(rt.userId AS CHAR) LIKE :kw)`,
+        { kw: `%${kw}%` },
+      );
+    }
+
+    qb.orderBy('rt.lastActiveAt', 'DESC').addOrderBy('rt.createdAt', 'DESC');
+
+    const total = await qb.getCount();
+    const rows = await qb
+      .offset((safePage - 1) * safeSize)
+      .limit(safeSize)
+      .getRawMany();
+
+    const list = rows.map((r) => ({
+      id: Number(r.id),
+      sessionId: r.sessionId,
+      userId: Number(r.userId),
+      username: r.username || '',
+      nickName: r.nickName || '',
+      avatar: r.avatar || '',
+      email: r.email || '',
+      userEnable: r.userEnable === 1 || r.userEnable === true,
+      deviceName: r.deviceName || DeviceParser.parse(r.userAgent),
+      userAgent: r.userAgent,
+      ipAddress: r.ipAddress,
+      createdAt: r.createdAt,
+      expiresAt: r.expiresAt,
+      lastActiveAt: r.lastActiveAt ?? r.createdAt,
+    }));
+
+    return { list, total, page: safePage, pageSize: safeSize };
+  }
+
+  // ============================================================
+  //                    多端会话管理（新增）
+  // ============================================================
+
+  /** Redis: 按会话维度的 access token key */
+  private accessTokenKey(userId: number | string, sessionId: string) {
+    return `auth:access_token:${userId}:${sessionId}`;
+  }
+
+  /**
+   * 获取最大并发会话数（默认 3，可在前端设置）
+   */
+  async getMaxSessions(): Promise<number> {
+    const v = await this.redisService.get(this.KEY_MAX_SESSIONS);
+    if (!v) return this.DEFAULT_MAX_SESSIONS;
+    const parsed = Number.parseInt(String(v), 10);
+    if (!Number.isInteger(parsed)) return this.DEFAULT_MAX_SESSIONS;
+    return Math.min(this.MAX_SESSIONS_LIMIT, Math.max(this.MIN_SESSIONS, parsed));
+  }
+
+  /**
+   * 设置最大并发会话数
+   */
+  async setMaxSessions(value: number): Promise<number> {
+    const num = Number.parseInt(String(value), 10);
+    if (!Number.isInteger(num)) {
+      throw new CustomException(ErrorCode.ERR_10000);
+    }
+    const normalized = Math.min(
+      this.MAX_SESSIONS_LIMIT,
+      Math.max(this.MIN_SESSIONS, num),
+    );
+    await this.redisService.set(this.KEY_MAX_SESSIONS, String(normalized));
+    return normalized;
+  }
+
+  /**
+   * 获取当前驱逐策略名（fifo / lru）
+   */
+  async getEvictionPolicyName(): Promise<'fifo' | 'lru'> {
+    const v = (await this.redisService.get(this.KEY_EVICTION_POLICY)) as
+      | 'fifo'
+      | 'lru'
+      | null;
+    return v && this.policyRegistry[v] ? v : 'fifo';
+  }
+
+  /**
+   * 设置驱逐策略
+   */
+  async setEvictionPolicy(name: 'fifo' | 'lru'): Promise<'fifo' | 'lru'> {
+    if (!this.policyRegistry[name]) {
+      throw new CustomException(ErrorCode.ERR_10000);
+    }
+    await this.redisService.set(this.KEY_EVICTION_POLICY, name);
+    return name;
+  }
+
+  /**
+   * 强制执行会话上限：超过则按策略驱逐
+   */
+  private async enforceSessionLimit(userId: number) {
+    const [maxSessions, policyName] = await Promise.all([
+      this.getMaxSessions(),
+      this.getEvictionPolicyName(),
+    ]);
+    const policy = this.policyRegistry[policyName];
+
+    const sessions = await this.refreshTokenRepository.find({
+      where: {
+        userId,
+        isRevoked: false,
+        expiresAt: MoreThan(new Date()),
+      },
+      order: { createdAt: 'ASC' },
+    });
+
+    const evictions = policy.pickEvictions(sessions, maxSessions);
+    if (evictions.length === 0) return;
+
+    this.logger.log(
+      `用户 ${userId} 会话超限（${sessions.length}/${maxSessions}），策略=${policyName}，驱逐 ${evictions.length} 个会话`,
+    );
+
+    // DB 批量撚销 + Redis 并行清理
+    const evictedIds = evictions.map((s) => s.id);
+    await Promise.all([
+      this.refreshTokenRepository.update({ id: In(evictedIds) }, { isRevoked: true }),
+      ...evictions
+        .filter((s) => !!s.sessionId)
+        .map((s) => this.redisService.del(this.accessTokenKey(userId, s.sessionId))),
+    ]);
+  }
+
+  /**
+   * 同设备幂等去重：同一 (userId + userAgent + ipAddress) 的旧会话视为
+   * 同一物理设备的重复登录，登录时静默撤销，避免会话数虚高。
+   */
+  private async revokeSessionsForSameDevice(
+    userId: number,
+    userAgent: string,
+    ipAddress?: string,
+  ): Promise<void> {
+    const where: any = {
+      userId,
+      userAgent,
+      isRevoked: false,
+      expiresAt: MoreThan(new Date()),
+    };
+    if (ipAddress) where.ipAddress = ipAddress;
+
+    const dupes = await this.refreshTokenRepository.find({
+      where,
+      select: ['id', 'sessionId'],
+    });
+    if (dupes.length === 0) return;
+
+    this.logger.log(
+      `用户 ${userId} 同设备重复登录，撤销 ${dupes.length} 个旧会话 (UA=${userAgent?.slice(0, 60)}..., IP=${ipAddress})`,
+    );
+
+    await Promise.all([
+      this.refreshTokenRepository.update(
+        { id: In(dupes.map((d) => d.id)) },
+        { isRevoked: true },
+      ),
+      ...dupes
+        .filter((d) => !!d.sessionId)
+        .map((d) => this.redisService.del(this.accessTokenKey(userId, d.sessionId))),
+    ]);
+  }
+
+  async revokeSession(sessionId: string, requireUserId?: number) {
+    if (!sessionId || sessionId === 'null' || sessionId === 'undefined') return false;
+    const where: any = { sessionId };
+    if (requireUserId != null) where.userId = requireUserId;
+
+    const token = await this.refreshTokenRepository.findOne({ where });
+    if (!token || token.isRevoked) return false;
+
+    // DB + Redis 并行
+    await Promise.all([
+      this.refreshTokenRepository.update({ id: token.id }, { isRevoked: true }),
+      token.sessionId
+        ? this.redisService.del(this.accessTokenKey(token.userId, token.sessionId))
+        : Promise.resolve(),
+    ]);
+    return true;
+  }
+
+  /**
+   * 撤销当前用户除指定会话外的所有会话（一键下线其它设备）
+   * 单 SQL 批量更新 + Redis 并行清理
+   */
+  async revokeOtherSessions(userId: number, keepSessionId?: string): Promise<number> {
+    const where: any = {
+      userId,
+      isRevoked: false,
+      expiresAt: MoreThan(new Date()),
+    };
+    if (keepSessionId) {
+      where.sessionId = Not(keepSessionId);
+    }
+
+    const targets = await this.refreshTokenRepository.find({
+      where,
+      select: ['id', 'sessionId'],
+    });
+    if (targets.length === 0) return 0;
+
+    await Promise.all([
+      this.refreshTokenRepository.update(
+        { id: In(targets.map((t) => t.id)) },
+        { isRevoked: true },
+      ),
+      ...targets
+        .filter((t) => !!t.sessionId)
+        .map((t) => this.redisService.del(this.accessTokenKey(userId, t.sessionId))),
+    ]);
+    return targets.length;
+  }
+
+  /**
+   * 触达：刷新会话最近活跃时间（轻量）
+   */
+  async touchSession(sessionId: string) {
+    if (!sessionId) return;
+    await this.refreshTokenRepository.update(
+      { sessionId, isRevoked: false },
+      { lastActiveAt: new Date() },
+    );
   }
 
   /**

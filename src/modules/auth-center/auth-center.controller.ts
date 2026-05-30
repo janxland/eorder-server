@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Req, Res, UseGuards, Logger, UsePipes, ValidationPipe, Header } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Req, Res, UseGuards, Logger, UsePipes, ValidationPipe, Header, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AuthCenterService } from './auth-center.service';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LoginDto } from './dto/login.dto';
@@ -362,6 +362,173 @@ export class AuthCenterController {
       success: true,
       data: profile
     };
+  }
+
+  // ============================================================
+  //                  多端会话管理 API（新增）
+  // ============================================================
+
+  /**
+   * 获取我的全部活跃会话（多设备列表）
+   */
+  @Get('sessions')
+  @UseGuards(AuthCenterGuard)
+  async listMySessions(@Req() req: any) {
+    const userId = req.user?.userId;
+    const currentSid = req.user?.sid;
+    const [sessions, maxSessions] = await Promise.all([
+      this.authCenterService.getUserActiveSessions(userId, currentSid),
+      this.authCenterService.getMaxSessions(),
+    ]);
+    return {
+      sessions,
+      maxSessions,
+      currentSessionId: currentSid,
+      total: sessions.length,
+    };
+  }
+
+  /**
+   * 撤销我的某个会话（踢下线某台设备）
+   */
+  @Delete('sessions/:sessionId')
+  @UseGuards(AuthCenterGuard)
+  async revokeMySession(@Req() req: any, @Param('sessionId') sessionId: string) {
+    if (!sessionId || sessionId === 'null' || sessionId === 'undefined') {
+      throw new NotFoundException('会话ID无效');
+    }
+    const userId = req.user?.userId;
+    const ok = await this.authCenterService.revokeSession(sessionId, userId);
+    if (!ok) throw new NotFoundException('会话不存在或不属于当前用户');
+    return { revoked: true, sessionId };
+  }
+
+  /**
+   * 获取多设备登录配置（最大会话数 / 驱逐策略）
+   */
+  @Get('sessions-config')
+  @UseGuards(AuthCenterGuard)
+  async getSessionsConfig() {
+    const [maxSessions, evictionPolicy] = await Promise.all([
+      this.authCenterService.getMaxSessions(),
+      this.authCenterService.getEvictionPolicyName(),
+    ]);
+    return { maxSessions, evictionPolicy };
+  }
+
+  /**
+   * 更新多设备登录配置（仅 SUPER_ADMIN）
+   */
+  @Post('sessions-config')
+  @UseGuards(AuthCenterGuard)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async updateSessionsConfig(
+    @Req() req: any,
+    @Body() body: { maxSessions?: number; evictionPolicy?: 'fifo' | 'lru' },
+  ) {
+    const roles: string[] = req.user?.roleCodes ?? [];
+    if (!roles.includes('SUPER_ADMIN') && !roles.includes('admin')) {
+      throw new ForbiddenException('权限不足');
+    }
+
+    const tasks: Array<Promise<any>> = [];
+    if (body?.maxSessions != null) {
+      tasks.push(this.authCenterService.setMaxSessions(body.maxSessions));
+    }
+    if (body?.evictionPolicy) {
+      tasks.push(this.authCenterService.setEvictionPolicy(body.evictionPolicy));
+    }
+    await Promise.all(tasks);
+
+    const [maxSessions, evictionPolicy] = await Promise.all([
+      this.authCenterService.getMaxSessions(),
+      this.authCenterService.getEvictionPolicyName(),
+    ]);
+    return { maxSessions, evictionPolicy };
+  }
+
+  /**
+   * 一键下线其它设备（保留当前会话）
+   */
+  @Post('sessions/revoke-others')
+  @UseGuards(AuthCenterGuard)
+  async revokeOtherSessions(@Req() req: any) {
+    const userId = req.user?.userId;
+    const currentSid = req.user?.sid;
+    const revoked = await this.authCenterService.revokeOtherSessions(userId, currentSid);
+    return { revoked };
+  }
+
+  // ============================================================
+  //              管理员视角：跨用户会话管理（新增）
+  // ============================================================
+
+  /** 校验 SUPER_ADMIN / admin 权限，否则抛 403 */
+  private assertAdmin(req: any) {
+    const roles: string[] = req.user?.roleCodes ?? [];
+    if (!roles.includes('SUPER_ADMIN') && !roles.includes('admin')) {
+      throw new ForbiddenException('权限不足');
+    }
+  }
+
+  /** 管理员：列出所有有活跃会话的用户（带数量统计） */
+  @Get('admin/sessions/users')
+  @UseGuards(AuthCenterGuard)
+  async adminListUsersWithSessions(
+    @Req() req: any,
+    @Body() _body: any, // 占位，避免被 ValidationPipe 警告
+  ) {
+    this.assertAdmin(req);
+    const keyword = (req.query?.keyword as string) || '';
+    const page = Number.parseInt(req.query?.page, 10) || 1;
+    const pageSize = Number.parseInt(req.query?.pageSize, 10) || 20;
+    return this.authCenterService.listUsersWithActiveSessions({ keyword, page, pageSize });
+  }
+
+  /** 管理员：平铺列出所有活跃会话（带用户详细信息），支持模糊搜索 */
+  @Get('admin/sessions')
+  @UseGuards(AuthCenterGuard)
+  async adminListAllSessions(@Req() req: any) {
+    this.assertAdmin(req);
+    const keyword = (req.query?.keyword as string) || '';
+    const page = Number.parseInt(req.query?.page, 10) || 1;
+    const pageSize = Number.parseInt(req.query?.pageSize, 10) || 20;
+    return this.authCenterService.listAllActiveSessions({ keyword, page, pageSize });
+  }
+
+  /** 管理员：查看任意用户的活跃会话列表 */
+  @Get('admin/users/:userId/sessions')
+  @UseGuards(AuthCenterGuard)
+  async adminListUserSessions(@Req() req: any, @Param('userId') userId: string) {
+    this.assertAdmin(req);
+    const uid = Number.parseInt(userId, 10);
+    if (!Number.isFinite(uid)) throw new NotFoundException('用户不存在');
+    const sessions = await this.authCenterService.getUserActiveSessions(uid);
+    return { sessions, total: sessions.length, userId: uid };
+  }
+
+  /** 管理员：强制下线任意会话（无 userId 校验） */
+  @Delete('admin/sessions/:sessionId')
+  @UseGuards(AuthCenterGuard)
+  async adminRevokeSession(@Req() req: any, @Param('sessionId') sessionId: string) {
+    this.assertAdmin(req);
+    if (!sessionId || sessionId === 'null' || sessionId === 'undefined') {
+      throw new NotFoundException('会话ID无效');
+    }
+    const ok = await this.authCenterService.revokeSession(sessionId);
+    if (!ok) throw new NotFoundException('会话不存在或已下线');
+    return { revoked: true, sessionId };
+  }
+
+  /** 管理员：一键下线指定用户的全部会话 */
+  @Post('admin/users/:userId/sessions/revoke-all')
+  @UseGuards(AuthCenterGuard)
+  async adminRevokeAllUserSessions(@Req() req: any, @Param('userId') userId: string) {
+    this.assertAdmin(req);
+    const uid = Number.parseInt(userId, 10);
+    if (!Number.isFinite(uid)) throw new NotFoundException('用户不存在');
+    const revoked = await this.authCenterService.revokeOtherSessions(uid);
+    return { revoked, userId: uid };
   }
 
   /**

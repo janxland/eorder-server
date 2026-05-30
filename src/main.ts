@@ -2,13 +2,25 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as session from 'express-session';
 import * as cookieParser from 'cookie-parser';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
+  const log = new Logger('Bootstrap');
+  const t0 = Date.now();
+  const step = (label: string, since?: number) => {
+    const now = Date.now();
+    const total = now - t0;
+    const delta = since ? now - since : total;
+    log.log(`⏱  [+${String(total).padStart(5)}ms] (${String(delta).padStart(5)}ms) ${label}`);
+    return now;
+  };
+
+  let t = step('start bootstrap');
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
   });
+  t = step('NestFactory.create 完成 (含 TypeORM + Redis 连接 + 所有 Module init)', t);
   
   // 配置极度宽松的验证管道
   app.useGlobalPipes(
@@ -82,7 +94,10 @@ async function bootstrap() {
     // 使用 Cookie 认证（会话：isme.session）
     .addCookieAuth('isme.session')
     .build();
+  t = step('全局中间件 / CORS 配置完成', t);
+
   const openApiDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  t = step('Swagger 文档构建完成 (扫描所有 controller)', t);
   SwaggerModule.setup('docs', app, openApiDocument, {
     swaggerOptions: { persistAuthorization: true },
   });
@@ -92,7 +107,8 @@ async function bootstrap() {
   });
 
   await app.listen(process.env.APP_PORT || 8085);
+  t = step('HTTP 监听就绪', t);
 
-  console.log(`🚀 启动成功: http://localhost:${process.env.APP_PORT}`);
+  log.log(`🚀 启动成功: http://localhost:${process.env.APP_PORT || 8085}  (总耗时 ${Date.now() - t0}ms)`);
 }
 bootstrap();

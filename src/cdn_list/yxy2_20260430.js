@@ -9,7 +9,7 @@
  * 校验接口：POST .../api/cdn-script/license/verify
  *
  * 书签（整行）：
- * javascript:(function(){var u='https://edu.roginx.ink/api/cdn-script/yxy2_20260430';var s=document.createElement('script');s.charset='utf-8';s.src=u+(/\?/.test(u)?'&':'?')+'_='+Date.now();(document.body||document.head||document.documentElement).appendChild(s);void 0;})();
+ * javascript:(function(){var u='https://edu.roginx.ink/api/cdn-script/yxy2_20260430';var s=document.createElement('script');s.charset='utf-8';s.src=u+(u.indexOf('?')>=0?'&':'?')+'_='+Date.now();(document.body||document.head||document.documentElement).appendChild(s);void 0;})();
  */
 
 var arrs = {
