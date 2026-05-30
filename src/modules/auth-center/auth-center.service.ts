@@ -14,6 +14,8 @@ import { Profile } from '@/modules/user/profile.entity';
 import { Role } from '@/modules/role/role.entity';
 import * as bcrypt from 'bcryptjs';
 import { DeviceParser } from './utils/device-parser.util';
+import { ClientIpExtractor } from './utils/client-ip.util';
+import { OriginExtractor } from './utils/origin.util';
 import {
   FifoSessionLimitPolicy,
   LruSessionLimitPolicy,
@@ -168,7 +170,8 @@ export class AuthCenterService {
    */
   async generateTokens(payload: any, req?: any) {
     const userAgent = req?.headers?.['user-agent'];
-    const ipAddress = req?.ip;
+    const ipAddress = ClientIpExtractor.extract(req);
+    const origin = OriginExtractor.extract(req);
 
     // 1. 同设备幂等：若已有活跃会话来自完全相同的 userAgent + ip，
     //    视为"同一物理设备的重复登录"，撤销旧会话后再创建新会话，
@@ -204,6 +207,7 @@ export class AuthCenterService {
         userId: payload.userId,
         userAgent,
         ipAddress,
+        origin,
         deviceName,
         lastActiveAt: now,
       }),
@@ -464,6 +468,7 @@ export class AuthCenterService {
         'sessionId',
         'userAgent',
         'ipAddress',
+        'origin',
         'deviceName',
         'createdAt',
         'expiresAt',
@@ -478,6 +483,7 @@ export class AuthCenterService {
       deviceName: s.deviceName || DeviceParser.parse(s.userAgent),
       userAgent: s.userAgent,
       ipAddress: s.ipAddress,
+      origin: s.origin,
       createdAt: s.createdAt,
       expiresAt: s.expiresAt,
       lastActiveAt: s.lastActiveAt ?? s.createdAt,
@@ -575,6 +581,7 @@ export class AuthCenterService {
         'rt.userId AS userId',
         'rt.userAgent AS userAgent',
         'rt.ipAddress AS ipAddress',
+        'rt.origin AS origin',
         'rt.deviceName AS deviceName',
         'rt.createdAt AS createdAt',
         'rt.expiresAt AS expiresAt',
@@ -593,7 +600,7 @@ export class AuthCenterService {
     if (kw) {
       qb.andWhere(
         `(u.username LIKE :kw OR p.nickName LIKE :kw OR rt.ipAddress LIKE :kw
-          OR rt.deviceName LIKE :kw OR rt.sessionId LIKE :kw OR CAST(rt.userId AS CHAR) LIKE :kw)`,
+          OR rt.deviceName LIKE :kw OR rt.origin LIKE :kw OR rt.sessionId LIKE :kw OR CAST(rt.userId AS CHAR) LIKE :kw)`,
         { kw: `%${kw}%` },
       );
     }
@@ -618,6 +625,7 @@ export class AuthCenterService {
       deviceName: r.deviceName || DeviceParser.parse(r.userAgent),
       userAgent: r.userAgent,
       ipAddress: r.ipAddress,
+      origin: r.origin || '',
       createdAt: r.createdAt,
       expiresAt: r.expiresAt,
       lastActiveAt: r.lastActiveAt ?? r.createdAt,
