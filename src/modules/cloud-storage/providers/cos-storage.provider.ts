@@ -215,6 +215,9 @@ export class CosStorageProvider implements CloudStorageInterface {
             {
               effect: 'allow',
               action: [
+                // 列目录（项目管理页依赖 getBucket）
+                'cos:GetBucket',
+                'cos:HeadBucket',
                 // 对象上传
                 'cos:GetObject', 
                 'cos:PostObject',

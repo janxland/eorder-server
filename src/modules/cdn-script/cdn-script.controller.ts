@@ -1,20 +1,17 @@
 /**
- * 跨域公开脚本、落地页、设备 + 许可证校验（可扩展多脚本 baseName）
+ * CDN 脚本控制器：提供落地页和脚本下载
  * website: https://www.roginx.ink
  */
 
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
   Header,
   NotFoundException,
   Param,
-  Post,
   Query,
   Req,
-  UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -24,18 +21,11 @@ import { CDN_LANDING_ROUTE_KEYS } from './cdn-landing-route-keys';
 import { renderBookmarkLandingHtml } from './bookmark-landing';
 import { resolvePublicApiOrigin } from './public-api-origin';
 import { CdnScriptService } from './cdn-script.service';
-import { CdnScriptLicenseService } from './cdn-script-license.service';
-import { LicenseAdminIssueBodyDto, LicenseVerifyBodyDto } from './dto/license.dto';
-import { AuthCenterGuard } from '@/common/guards/auth-center.guard';
-import { PermissionCodeGuard } from '@/common/guards/permission-code.guard';
-import { RequirePermission } from '@/common/decorators/permission.decorator';
-import { PermissionCode } from '@/common/enums/permission-code.enum';
 
 @Controller(['cdn-script', 'api/cdn-script'])
 export class CdnScriptController {
   constructor(
     private readonly cdnScriptService: CdnScriptService,
-    private readonly cdnScriptLicenseService: CdnScriptLicenseService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -60,10 +50,6 @@ export class CdnScriptController {
     });
   }
 
-  /**
-   * 短链落地页：枚举键 → cdn_list 脚本（便于收藏夹 URL 缩短）
-   * 例：GET /api/cdn-script/landing/pa
-   */
   @Get('landing/:shortKey')
   @Public()
   @ReturnType('primitive')
@@ -86,6 +72,16 @@ export class CdnScriptController {
       publicApiOrigin: origin,
       bookmarkLabel: entry.bookmarkLabel,
     });
+  }
+
+  @Get(':baseName')
+  @Public()
+  @ReturnType('primitive')
+  @Header('Content-Type', 'application/javascript; charset=utf-8')
+  @Header('Cache-Control', 'public, max-age=300')
+  @Header('Access-Control-Allow-Origin', '*')
+  getByFileBaseName(@Param('baseName') baseName: string): string {
+    return this.cdnScriptService.getScriptByBaseName(baseName);
   }
 
   private extractBaseNameFromUrl(scriptUrl: string): string {
@@ -120,48 +116,5 @@ export class CdnScriptController {
     } catch {
       return false;
     }
-  }
-
-  /**
-   * 设备端校验：考试页 script 与 learning 页均调用
-   */
-  @Post('license/verify')
-  @Public()
-  @ReturnType('primitive')
-  postVerifyLicense(@Body() body: LicenseVerifyBodyDto) {
-    this.cdnScriptLicenseService.assertLicenseValid(
-      body.fingerprint,
-      body.baseName,
-      body.licenseKey,
-    );
-    return { valid: true, baseName: body.baseName };
-  }
-
-  /**
-   * 管理后台：凭用户提供的指纹 + 脚本主名，生成可下发的许可证密钥
-   */
-  @Post('license/admin/issue')
-  @UseGuards(AuthCenterGuard, PermissionCodeGuard)
-  @RequirePermission(PermissionCode.ISSUE_CDN_SCRIPT_LICENSE)
-  @ReturnType('primitive')
-  postAdminIssueLicense(@Body() body: LicenseAdminIssueBodyDto) {
-    if (!body.fingerprint || !body.baseName) {
-      throw new BadRequestException('缺少 fingerprint 或 baseName');
-    }
-    const licenseKey = this.cdnScriptLicenseService.deriveLicenseKey(
-      body.fingerprint.trim(),
-      body.baseName.trim(),
-    );
-    return { licenseKey, baseName: body.baseName.trim() };
-  }
-
-  @Get(':baseName')
-  @Public()
-  @ReturnType('primitive')
-  @Header('Content-Type', 'application/javascript; charset=utf-8')
-  @Header('Cache-Control', 'public, max-age=300')
-  @Header('Access-Control-Allow-Origin', '*')
-  getByFileBaseName(@Param('baseName') baseName: string): string {
-    return this.cdnScriptService.getScriptByBaseName(baseName);
   }
 }

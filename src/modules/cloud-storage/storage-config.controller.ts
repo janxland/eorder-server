@@ -33,10 +33,17 @@ export class StorageConfigController {
    */
   @Get(':id')
   @RequirePermission(PermissionCode.SHOW_STORAGE_CONFIG_DETAIL)
-  async findOne(@Param('id') id: number, @Req() req: any): Promise<StorageConfig> {
+  async findOne(@Param('id') id: number, @Req() req: any): Promise<any> {
     const userId = req.user?.userId;
-    // 单独查询时返回完整的信息（包括敏感字段）
-    return this.storageConfigService.findById(+id, userId);
+    const roleCodes: string[] = req.user?.roleCodes || [];
+    const config = await this.storageConfigService.findById(+id, userId);
+
+    // 仅超级管理员可查看完整密钥
+    if (roleCodes.includes('SUPER_ADMIN')) {
+      return config;
+    }
+
+    return this.storageConfigService.excludeSensitiveFields(config);
   }
 
   /**
