@@ -19,6 +19,7 @@ import { Public } from '@/common/decorators/public.decorator';
 @Controller('/llm')
 @UseGuards(AuthCenterGuard, PermissionCodeGuard)
 export class LLMController {
+
   private readonly logger = new Logger('LLMController');
   constructor(private readonly llmService: LLMService) {}
 
