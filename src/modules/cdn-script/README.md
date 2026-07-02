@@ -18,33 +18,53 @@
 │   │ 首次点击 │           │ 首次点击 │       │  落地页     │    │
 │   │ 注入脚本 │           │ 注入脚本 │       │  登录+配置  │    │
 │   └────┬─────┘           └────┬─────┘       └─────────────┘    │
-│        │                      │                   │             │
-│        │ POST /llm/          │ POST /llm/        │             │
-│        │ JWT鉴权✓            │ JWT鉴权✓          │             │
-│        │ Redis缓存✓          │ Redis缓存✓        │             │
-│        ▼                      ▼                   │             │
-│   ┌─────────────────────────────────────────┐   │             │
-│   │         Redis: llm_session:domain:uid   │   │             │
-│   │  baidu.com:user123 → TTL 24h            │   │             │
-│   │  bilibili.com:user123 → TTL 24h         │   │             │
-│   └─────────────────────────────────────────┘   │             │
-│        │                      │                   │             │
-│        │ 后续LLM请求           │ 后续LLM请求       │             │
-│        │ 命中缓存✓            │ 命中缓存✓         │             │
-│        │ 无需鉴权             │ 无需鉴权           │             │
-└────────┼──────────────────────┼───────────────────┘             │
+│        │                      │                   │               │
+│        │ POST /llm/         │ POST /llm/       │               │
+│        │ JWT鉴权✓           │ JWT鉴权✓         │               │
+│        │ Redis缓存✓         │ Redis缓存✓       │               │
+│        ▼                      ▼                   │               │
+│   ┌─────────────────────────────────────────┐   │               │
+│   │         Redis: llm_session:domain:uid   │   │               │
+│   │  baidu.com:user123 → TTL 24h            │   │               │
+│   │  bilibili.com:user123 → TTL 24h         │   │               │
+│   └─────────────────────────────────────────┘   │               │
+│        │                      │                   │               │
+│        │ 后续LLM请求          │ 后续LLM请求       │               │
+│        │ 命中缓存✓           │ 命中缓存✓         │               │
+└────────┼──────────────────────┼───────────────────┘               │
          │                      │                                │
          ▼                      ▼                                │
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Nginx (OpenResty)                          │
 │                                                                 │
-│   location ^~ /llm/ {                                          │
-│       access_by_lua_file xqjn-llm-auth.lua;                    │
-│       # 1. 检查 Redis 会话缓存                                  │
-│       # 2. 无缓存 → JWT 鉴权 → 创建缓存                        │
-│       # 3. 有缓存 → 直接放行                                    │
-│       proxy_pass $proxy_target;                                 │
-│   }                                                            │
+│   xqjn.top/llm/                                               │
+│       │                                                        │
+│       ├── access_by_lua_file xqjn-llm-auth.lua                │
+│       │   ├─ 检查 Redis 会话缓存                               │
+│       │   ├─ 无缓存 → JWT 鉴权 → 创建缓存                     │
+│       │   └─ 有缓存 → 直接放行                                 │
+│       │                                                        │
+│       └── proxy_pass edu.roginx.ink/api/llm/                  │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    edu.roginx.ink (eorder-server)                │
+│                                                                 │
+│   /api/llm/v1/chat/completions                                 │
+│       │                                                        │
+│       └── LLMProxyController                                   │
+│               │                                                │
+│               ├── 读取 X-Proxy-Key (用户API Key)              │
+│               ├── 读取 X-Proxy-Target (用户指定BaseURL)        │
+│               │                                                │
+│               └── 代理到用户指定的 LLM 服务商                   │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    任意 LLM 服务商                               │
+│            OpenAI / 硅基流动 / Ollama / 其他兼容 API              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -70,18 +90,38 @@ TTL: 24小时（可配置）
     ↓
 登录（获得 JWT）
     ↓
-配置 API Key + Base URL + Model
+配置 API Key + Base URL + Model（存 localStorage）
     ↓
 拖拽书签到收藏夹
     ↓
-在任意网站点击书签 → 注入脚本
+在任意网站点击书签 → 脚本从 localStorage 读取配置 → 调用 /llm/
 ```
 
-### 3. 跨域支持
+### 3. 完整数据流
 
-- 书签从 CDN 加载脚本
-- 脚本调用 `/llm/v1/chat/completions`
-- 服务端透传 CORS，任意网站可用
+```
+1. 浏览器 POST /llm/v1/chat/completions
+   Headers:
+     Authorization: Bearer <JWT>
+     X-Proxy-Key: sk-xxx           ← 用户自己的 API Key
+     X-Proxy-Target: https://...   ← 用户指定的 Base URL
+
+2. Nginx Lua 鉴权 (xqjn-llm-auth.lua)
+   ├─ 检查 Redis: llm_session:baidu.com:user123
+   │    ├─ 有缓存 → 直接放行，跳过鉴权
+   │    └─ 无缓存 → JWT 验证 → 创建缓存
+   │
+   └─ 代理到 edu.roginx.ink/api/llm/v1/chat/completions
+
+3. eorder-server LLMProxyController
+   ├─ 读取 X-Proxy-Key → 作为 Authorization Bearer
+   ├─ 读取 X-Proxy-Target → 作为上游 Base URL
+   │
+   └─ 代理到用户指定的 LLM 服务商
+
+4. LLM 服务商响应流式数据
+   └─ 原样返回给浏览器
+```
 
 ## API 接口
 
@@ -113,58 +153,10 @@ Headers:
 | `cdn-config.entity.ts` | CDN 配置实体 |
 | `cdn-config.service.ts` | CDN 配置 CRUD |
 | `cdn-config.controller.ts` | CDN 配置 API |
+| `llm-proxy.controller.ts` | LLM 代理请求处理（接收 Nginx 代理） |
 | `scripts/nginx-lua/xqjn-llm-auth.lua` | JWT 鉴权 + 会话缓存 |
 | `scripts/nginx-lua/llm-proxy.conf` | Nginx 配置 |
 | `scripts/nginx-lua/deploy-llm-proxy.js` | 部署脚本 |
-
-## 数据流
-
-```
-用户操作
-    │
-    ▼
-┌─────────────────┐
-│   落地页        │
-│ 1. 登录         │
-│ 2. 配置 CDN     │
-│ 3. 生成书签     │
-└────────┬────────┘
-         │
-         │ 拖拽书签
-         ▼
-┌─────────────────┐
-│   任意网站      │
-│ 点击书签        │
-│ 注入脚本        │
-└────────┬────────┘
-         │
-         │ POST /llm/v1/chat/completions
-         │ Authorization: Bearer <JWT>
-         │ X-Proxy-Key: <key>
-         ▼
-┌─────────────────────────────────┐
-│         Nginx Lua               │
-│                                 │
-│ 检查 Redis 缓存                 │
-│ llm_session:baidu.com:user123  │
-│                                 │
-│ ├─ 有缓存 → 直接放行            │
-│ │         ↑                    │
-│ │         └── 同域名后续请求    │
-│ │                              │
-│ └─ 无缓存 → JWT 鉴权            │
-│           ↓                    │
-│         创建缓存               │
-│         (TTL 24h)              │
-└─────────────────┬───────────────┘
-                  │
-                  │ 代理转发
-                  ▼
-┌─────────────────────────────────┐
-│      用户指定的 LLM 服务商       │
-│    OpenAI / 硅基流动 / Ollama  │
-└─────────────────────────────────┘
-```
 
 ## 安全性
 
@@ -182,16 +174,6 @@ Headers:
 | `LLM_PROXY_JWT_SECRET` | JWT 签名密钥 | `change-me-in-production` |
 | `LLM_SESSION_TTL` | 会话缓存 TTL（秒）| `86400`（24小时）|
 | `NGINX_SSH_HOST` | Nginx 服务器地址 | `xqjn.top` |
-
-## 与传统方案对比
-
-| 特性 | 传统 CORS 代理 | 本方案 |
-|------|----------------|--------|
-| 跨域 | 需要配置 | 天然支持 |
-| 鉴权 | 每次请求 | 首次鉴权，后续缓存 |
-| 域名隔离 | 无 | 域名级独立会话 |
-| 书签化 | 不支持 | 原生支持 |
-| 多供应商 | 固定配置 | 用户自由切换 |
 
 ## 使用流程
 
@@ -222,6 +204,7 @@ fetch('https://xqjn.top/llm/v1/chat/completions', {
   headers: {
     'Authorization': 'Bearer ' + token,
     'X-Proxy-Key': apiKey,
+    'X-Proxy-Target': baseUrl,
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -230,3 +213,13 @@ fetch('https://xqjn.top/llm/v1/chat/completions', {
   })
 })
 ```
+
+## 与传统方案对比
+
+| 特性 | 传统 CORS 代理 | 本方案 |
+|------|----------------|--------|
+| 跨域 | 需要配置 | 天然支持 |
+| 鉴权 | 每次请求 | 首次鉴权，后续缓存 |
+| 域名隔离 | 无 | 域名级独立会话 |
+| 书签化 | 不支持 | 原生支持 |
+| 多供应商 | 固定配置 | 用户自由切换 |
