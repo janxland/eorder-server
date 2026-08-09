@@ -14,6 +14,10 @@ export class CreateStorageConfigDto {
   @IsEnum(StorageType)
   type: StorageType;
 
+  /** 引用云存储账号（推荐，密钥加密存储）；不传则走旧字段（仅历史兼容） */
+  @IsOptional()
+  accountId?: number;
+
   @IsNotEmpty({ message: '区域不能为空' })
   @IsString()
   @MaxLength(255)
@@ -29,15 +33,15 @@ export class CreateStorageConfigDto {
   @MaxLength(255)
   prefix?: string;
 
-  @IsNotEmpty({ message: 'AccessKey不能为空' })
+  @IsOptional()
   @IsString()
   @MaxLength(255)
-  accessKey: string;
+  accessKey?: string;
 
-  @IsNotEmpty({ message: 'SecretKey不能为空' })
+  @IsOptional()
   @IsString()
   @MaxLength(255)
-  secretKey: string;
+  secretKey?: string;
 
   @IsOptional()
   @IsString()

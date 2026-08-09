@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { StorageConfig } from './entities/storage-config.entity';
 import { CreateStorageConfigDto, TestStorageConfigDto, UpdateStorageConfigDto } from './dto/storage-config.dto';
 import { CloudStorageFactory } from './providers/cloud-storage.factory';
+import { StorageAccountService } from './accounts/storage-account.service';
 
 @Injectable()
 export class StorageConfigService {
@@ -13,6 +14,7 @@ export class StorageConfigService {
     @InjectRepository(StorageConfig)
     private readonly storageConfigRepository: Repository<StorageConfig>,
     private readonly cloudStorageFactory: CloudStorageFactory,
+    private readonly storageAccountService: StorageAccountService,
   ) {}
 
   /**
@@ -85,6 +87,7 @@ export class StorageConfigService {
 
   /**
    * 创建存储配置
+   * 新设计：密钥不直接存本表，通过 accountId 引用 storage_accounts
    * @param createDto 创建DTO
    * @param userId 用户ID（可选）
    * @returns 创建的存储配置
@@ -96,7 +99,17 @@ export class StorageConfigService {
       await this.resetDefaultFlag();
     }
 
-    const config = this.storageConfigRepository.create(createDto);
+    // 若传了 accountId 但配置里带了明文密钥 → 拒绝（不允许绕过账号层存明文）
+    if (createDto.accountId && (createDto.accessKey || createDto.secretKey)) {
+      throw new BadRequestException('使用账号引用时不允许直接传 accessKey/secretKey，请通过云存储账号管理维护密钥');
+    }
+
+    const config = this.storageConfigRepository.create({
+      ...createDto,
+      // 账号引用方式：不存明文
+      accessKey: undefined,
+      secretKey: undefined,
+    } as Partial<StorageConfig>) as StorageConfig;
     return this.storageConfigRepository.save(config);
   }
 
@@ -116,9 +129,30 @@ export class StorageConfigService {
       await this.resetDefaultFlag();
     }
 
-    // 更新配置
-    Object.assign(config, updateDto);
+    // 更新配置（禁止通过 update 写入明文密钥）
+    const { accessKey, secretKey, ...safeUpdate } = updateDto as any;
+    if (accessKey || secretKey) {
+      this.logger.warn(`检测到 update 尝试写入明文密钥，已忽略（请用账号管理轮换）: id=${id}`);
+    }
+    Object.assign(config, safeUpdate);
     return this.storageConfigRepository.save(config);
+  }
+
+  /**
+   * 获取配置使用的永久密钥（服务内部：签发 STS 用）
+   * 优先账号引用；无账号时回退旧字段（历史数据兼容）
+   */
+  async getSecretCredentials(config: StorageConfig): Promise<{ accessKey: string; secretKey: string }> {
+    if (config.accountId) {
+      return this.storageAccountService.getCredentials(config.accountId);
+    }
+    // 历史兼容：直接读旧字段
+    const ak = config.accessKey || (config as any).accessKey;
+    const sk = config.secretKey || (config as any).secretKey;
+    if (ak && sk) {
+      return { accessKey: ak, secretKey: sk };
+    }
+    throw new BadRequestException(`存储配置 ${config.name} 既无账号引用也无密钥，无法签发凭证`);
   }
 
   /**
@@ -196,7 +230,7 @@ export class StorageConfigService {
       const tempConfig = this.storageConfigRepository.create(testDto);
       
       // 创建存储提供商实例
-      const provider = this.cloudStorageFactory.create(tempConfig);
+      const provider = await this.cloudStorageFactory.create(tempConfig);
       
       // 测试连接
       const success = await provider.testConnection();

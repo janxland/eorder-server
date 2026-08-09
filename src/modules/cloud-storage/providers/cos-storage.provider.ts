@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import * as COS from 'cos-nodejs-sdk-v5';
 import * as STS from 'qcloud-cos-sts';
 import { CloudStorageInterface } from './cloud-storage.interface';
 import { StorageConfig } from '../entities/storage-config.entity';
+import { StorageConfigService } from '../storage-config.service';
 
 // STS类型定义
 interface STSCredentials {
@@ -22,22 +23,46 @@ export class CosStorageProvider implements CloudStorageInterface {
   private client: COS;
   private config: StorageConfig;
   private readonly logger = new Logger(CosStorageProvider.name);
-  
-  constructor() {}
+
+  constructor(
+    @Inject(forwardRef(() => StorageConfigService))
+    private readonly storageConfigService?: StorageConfigService,
+  ) {}
 
   /**
    * 初始化COS客户端
    * @param config 存储配置
    */
-  initialize(config: StorageConfig): void {
+  async initialize(config: StorageConfig): Promise<void> {
     this.config = config;
+    // 永久密钥从账号层解析（加密存储），或回退旧字段（历史兼容）
+    const { accessKey, secretKey } = await this.resolveCredentials(config);
     this.client = new COS({
-      SecretId: config.accessKey,
-      SecretKey: config.secretKey,
+      SecretId: accessKey,
+      SecretKey: secretKey,
       FileParallelLimit: 3,
       ChunkParallelLimit: 8,
       ChunkSize: 1024 * 1024 * 8,
     });
+  }
+
+  /**
+   * 解析永久密钥：优先账号引用（storage_accounts 加密字段），回退旧字段
+   */
+  private async resolveCredentials(config: StorageConfig): Promise<{ accessKey: string; secretKey: string }> {
+    if (this.storageConfigService) {
+      try {
+        return await this.storageConfigService.getSecretCredentials(config);
+      } catch (e) {
+        // 账号解析失败时回退旧字段
+        if (config.accessKey && config.secretKey) {
+          return { accessKey: config.accessKey, secretKey: config.secretKey };
+        }
+        throw e;
+      }
+    }
+    // 无 service（单测等场景）直接读旧字段
+    return { accessKey: config.accessKey, secretKey: config.secretKey };
   }
 
   /**
@@ -206,35 +231,54 @@ export class CosStorageProvider implements CloudStorageInterface {
     this.logger.debug(`最终资源前缀: ${resourcePrefix}`);
 
     try {
+      // STS policy 收敛：resource 精确到 bucket + 配置前缀（deploy 脚本按 prefix 清理旧构建）
+      // 格式: qcs::cos:{region}:uid/{appid}:{bucket}/{prefix}/*
+      const appidMatch = this.config.bucket.match(/-(\d+)$/);
+      const appid = appidMatch ? appidMatch[1] : '';
+      const cleanPrefix = resourcePrefix.replace(/^\/+|\/+$/g, '');
+      const objectResource = `qcs::cos:${this.config.region}:uid/${appid}:${this.config.bucket}${cleanPrefix ? `/${cleanPrefix}` : ''}/*`;
+      // 桶级资源（GetBucket/HeadBucket 需要，否则临时密钥列目录失败）
+      const bucketResource = `qcs::cos:${this.config.region}:uid/${appid}:${this.config.bucket}`;
+
+      const { accessKey, secretKey } = await this.resolveCredentials(this.config);
+
       const stsConfig = {
-        secretId: this.config.accessKey,
-        secretKey: this.config.secretKey,
+        secretId: accessKey,
+        secretKey: secretKey,
         policy: {
           version: '2.0',
           statement: [
             {
               effect: 'allow',
               action: [
-                // 列目录（项目管理页依赖 getBucket）
+                // 权限自检（checkCOSPermission 用 getService）
+                'cos:GetService',
+                // 桶级：列目录/头探测（GetBucket/HeadBucket 需用桶级资源）
                 'cos:GetBucket',
                 'cos:HeadBucket',
-                // 对象上传
-                'cos:GetObject', 
+                'cos:ListMultipartUploads',
+              ],
+              resource: [bucketResource],
+            },
+            {
+              effect: 'allow',
+              action: [
+                // 对象级：上传/读取/删除（deploy 脚本清理旧构建需删除权限）
+                'cos:GetObject',
                 'cos:PostObject',
                 'cos:PutObject',
+                'cos:DeleteObject',
+                'cos:DeleteMultipleObjects',
                 // 分块上传
                 'cos:InitiateMultipartUpload',
-                'cos:ListMultipartUploads',
                 'cos:ListParts',
                 'cos:UploadPart',
                 'cos:CompleteMultipartUpload',
-                'cos:AbortMultipartUpload'
+                'cos:AbortMultipartUpload',
               ],
-              resource: [
-                '*'
-              ]
-            }
-          ]
+              resource: [objectResource],
+            },
+          ],
         },
         durationSeconds: expires,
         region: this.config.region,

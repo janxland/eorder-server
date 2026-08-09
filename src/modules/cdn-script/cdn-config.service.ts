@@ -24,7 +24,7 @@ export class CdnConfigService {
   /**
    * 获取单个配置
    */
-  async findById(id: string): Promise<CdnConfig> {
+  async findById(id: string): Promise<CdnConfigDocument> {
     const config = await this.cdnConfigModel.findById(id).exec();
     if (!config) throw new NotFoundException('CDN 配置不存在');
     return config;
@@ -74,7 +74,7 @@ export class CdnConfigService {
     if (dto.name !== undefined) config.name = dto.name.trim();
     if (dto.baseUrl !== undefined) config.baseUrl = dto.baseUrl.trim().replace(/\/+$/, '');
     if (dto.apiKey !== undefined) config.apiKey = dto.apiKey.trim();
-    if (dto.model !== undefined) config.model = dto.model?.trim() || '';
+    if (dto.model !== undefined) (config as any).model = dto.model?.trim() || '';
 
     if (dto.isDefault) {
       // 取消其他默认

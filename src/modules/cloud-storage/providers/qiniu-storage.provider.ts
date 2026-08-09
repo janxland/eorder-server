@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import * as qiniu from 'qiniu';
 import { CloudStorageInterface } from './cloud-storage.interface';
 import { StorageConfig } from '../entities/storage-config.entity';
+import { StorageConfigService } from '../storage-config.service';
 
 @Injectable()
 export class QiniuStorageProvider implements CloudStorageInterface {
@@ -10,21 +11,42 @@ export class QiniuStorageProvider implements CloudStorageInterface {
   private bucketManager: qiniu.rs.BucketManager;
   private readonly logger = new Logger(QiniuStorageProvider.name);
 
-  constructor() {}
+  constructor(
+    @Inject(forwardRef(() => StorageConfigService))
+    private readonly storageConfigService?: StorageConfigService,
+  ) {}
 
   /**
-   * 初始化七牛云客户端
+   * 初始化七牛云客户端（密钥从账号层解析）
    * @param config 存储配置
    */
-  initialize(config: StorageConfig): void {
+  async initialize(config: StorageConfig): Promise<void> {
     this.config = config;
-    this.mac = new qiniu.auth.digest.Mac(config.accessKey, config.secretKey);
+    const { accessKey, secretKey } = await this.resolveCredentials(config);
+    this.mac = new qiniu.auth.digest.Mac(accessKey, secretKey);
     const qiniuConfig = new qiniu.conf.Config();
-    
+
     // 设置区域
     qiniuConfig.zone = this.getZone(config.region);
-    
+
     this.bucketManager = new qiniu.rs.BucketManager(this.mac, qiniuConfig);
+  }
+
+  /**
+   * 解析永久密钥：优先账号引用，回退旧字段
+   */
+  private async resolveCredentials(config: StorageConfig): Promise<{ accessKey: string; secretKey: string }> {
+    if (this.storageConfigService) {
+      try {
+        return await this.storageConfigService.getSecretCredentials(config);
+      } catch (e) {
+        if (config.accessKey && config.secretKey) {
+          return { accessKey: config.accessKey, secretKey: config.secretKey };
+        }
+        throw e;
+      }
+    }
+    return { accessKey: config.accessKey, secretKey: config.secretKey };
   }
 
   /**

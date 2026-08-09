@@ -34,7 +34,7 @@ export class CloudStorageService {
       : await this.storageConfigService.findDefault();
     
     // 创建存储提供商实例
-    const provider = this.cloudStorageFactory.create(config);
+    const provider = await this.cloudStorageFactory.create(config);
     
     // 获取上传凭证
     return provider.getUploadToken(key);
@@ -57,7 +57,7 @@ export class CloudStorageService {
       : await this.storageConfigService.findDefault();
     
     // 创建存储提供商实例
-    const provider = this.cloudStorageFactory.create(config);
+    const provider = await this.cloudStorageFactory.create(config);
     
     // 获取上传URL
     return provider.getUploadUrl(key);
@@ -79,7 +79,7 @@ export class CloudStorageService {
       : await this.storageConfigService.findDefault();
     
     // 创建存储提供商实例
-    const provider = this.cloudStorageFactory.create(config);
+    const provider = await this.cloudStorageFactory.create(config);
     
     // 获取文件URL
     return provider.getFileUrl(key);
@@ -101,7 +101,7 @@ export class CloudStorageService {
       : await this.storageConfigService.findDefault();
     
     // 创建存储提供商实例
-    const provider = this.cloudStorageFactory.create(config);
+    const provider = await this.cloudStorageFactory.create(config);
     
     // 删除文件
     return provider.deleteFile(key);
@@ -117,7 +117,7 @@ export class CloudStorageService {
     const config = await this.storageConfigService.findById(configId);
     
     // 创建存储提供商实例
-    const provider = this.cloudStorageFactory.create(config);
+    const provider = await this.cloudStorageFactory.create(config);
     
     // 测试连接
     return provider.testConnection();
@@ -133,7 +133,7 @@ export class CloudStorageService {
     this.logger.debug(`生成临时密钥: configId=${config.id}, prefix=${prefix}`);
     
     // 根据存储类型创建对应的提供商实例
-    const provider = this.cloudStorageFactory.create(config);
+    const provider = await this.cloudStorageFactory.create(config);
     
     // 检查provider是否实现了generateTempCredentials方法
     if (typeof (provider as any).generateTempCredentials !== 'function') {

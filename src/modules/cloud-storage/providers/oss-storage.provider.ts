@@ -1,29 +1,51 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import * as OSS from 'ali-oss';
 import { CloudStorageInterface } from './cloud-storage.interface';
 import { StorageConfig } from '../entities/storage-config.entity';
+import { StorageConfigService } from '../storage-config.service';
 
 @Injectable()
 export class OssStorageProvider implements CloudStorageInterface {
   private client: OSS;
   private config: StorageConfig;
   private readonly logger = new Logger(OssStorageProvider.name);
-  
-  constructor() {}
+
+  constructor(
+    @Inject(forwardRef(() => StorageConfigService))
+    private readonly storageConfigService?: StorageConfigService,
+  ) {}
 
   /**
-   * 初始化OSS客户端
+   * 初始化OSS客户端（密钥从账号层解析）
    * @param config 存储配置
    */
-  initialize(config: StorageConfig): void {
+  async initialize(config: StorageConfig): Promise<void> {
     this.config = config;
+    const { accessKey, secretKey } = await this.resolveCredentials(config);
     this.client = new OSS({
-      accessKeyId: config.accessKey,
-      accessKeySecret: config.secretKey,
+      accessKeyId: accessKey,
+      accessKeySecret: secretKey,
       bucket: config.bucket,
       region: config.region,
       endpoint: config.endpoint,
     });
+  }
+
+  /**
+   * 解析永久密钥：优先账号引用，回退旧字段
+   */
+  private async resolveCredentials(config: StorageConfig): Promise<{ accessKey: string; secretKey: string }> {
+    if (this.storageConfigService) {
+      try {
+        return await this.storageConfigService.getSecretCredentials(config);
+      } catch (e) {
+        if (config.accessKey && config.secretKey) {
+          return { accessKey: config.accessKey, secretKey: config.secretKey };
+        }
+        throw e;
+      }
+    }
+    return { accessKey: config.accessKey, secretKey: config.secretKey };
   }
 
   /**

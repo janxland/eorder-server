@@ -5,6 +5,7 @@ import { AllExceptionFilter } from '@/common/filters/all-exception.filter';
 import { TransformInterceptor } from '@/common/interceptors/transform.interceptor';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { RedisService } from './redis.service';
 import { createClient } from 'redis';
 import { User } from '../modules/user/user.entity';
@@ -48,6 +49,22 @@ const bootLog = new Logger('SharedModule');
           // 真正连接耗时看 NestFactory.create() 总耗时
           ...(() => { bootLog.log(`⏱  TypeORM config 准备完成 (${Date.now() - tStart}ms)`); return {}; })(),
         } as any;
+      },
+    }),
+    // MongoDB 连接（cdn-config 模块使用；MONGO_URI 未配置时 fallback 到本地 27017，
+    // 配合 serverSelectionTimeoutMS 快速失败，保证无 Mongo 环境也能启动其他模块）
+    MongooseModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const mongoUri = process.env.MONGO_URI || configService.get('MONGO_URI');
+        const uri = mongoUri || 'mongodb://127.0.0.1:27017/unused';
+        const masked = uri.replace(/\/\/[^@]+@/, '//***@');
+        bootLog.log(`⏱  MongoDB 正在连接 ${masked} (serverSelectionTimeoutMS=2000)`);
+        return {
+          uri,
+          serverSelectionTimeoutMS: 2000,
+          connectTimeoutMS: 2000,
+        };
       },
     }),
     TypeOrmModule.forFeature([User, Profile, Role, Permission, System]),

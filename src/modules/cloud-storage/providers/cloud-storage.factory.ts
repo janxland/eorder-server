@@ -17,11 +17,11 @@ export class CloudStorageFactory {
   ) {}
 
   /**
-   * 创建云存储提供商实例
+   * 创建云存储提供商实例（异步初始化：密钥从账号层解析）
    * @param config 存储配置
    * @returns 云存储提供商实例
    */
-  create(config: StorageConfig): CloudStorageInterface {
+  async create(config: StorageConfig): Promise<CloudStorageInterface> {
     let provider: CloudStorageInterface;
 
     switch (config.type) {
@@ -38,9 +38,9 @@ export class CloudStorageFactory {
         throw new Error(`不支持的存储类型: ${config.type}`);
     }
 
-    // 初始化提供商
-    (provider as any).initialize(config);
-    
+    // 初始化提供商（异步：解密账号密钥）
+    await (provider as any).initialize(config);
+
     return provider;
   }
-} 
+}

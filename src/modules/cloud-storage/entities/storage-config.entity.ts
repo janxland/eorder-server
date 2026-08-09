@@ -1,4 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import { StorageAccount } from '../accounts/storage-account.entity';
 
 /**
  * 云存储服务类型枚举
@@ -11,6 +12,8 @@ export enum StorageType {
 
 /**
  * 云存储配置实体
+ * 新设计：密钥不再直接存本表，通过 accountId 引用 storage_accounts（密钥加密存储）
+ * 旧字段 accessKey/secretKey 保留以兼容历史数据（迁移后置空）
  */
 @Entity('storage_config')
 export class StorageConfig {
@@ -27,6 +30,15 @@ export class StorageConfig {
   })
   type: StorageType;
 
+  /** 引用云存储账号（密钥加密存储） */
+  @Index()
+  @Column({ nullable: true })
+  accountId: number;
+
+  @ManyToOne(() => StorageAccount, (account) => account.configs, { nullable: true })
+  @JoinColumn({ name: 'accountId' })
+  account: StorageAccount;
+
   @Column({ length: 255 })
   region: string;
 
@@ -36,10 +48,12 @@ export class StorageConfig {
   @Column({ length: 255, nullable: true })
   prefix: string;
 
-  @Column({ length: 255 })
+  /** 旧字段：历史数据兼容，新配置不再使用（迁移后可为空） */
+  @Column({ length: 255, nullable: true, select: false })
   accessKey: string;
 
-  @Column({ length: 255 })
+  /** 旧字段：历史数据兼容，新配置不再使用（迁移后可为空） */
+  @Column({ length: 255, nullable: true, select: false })
   secretKey: string;
 
   @Column({ length: 255, nullable: true })
@@ -68,4 +82,4 @@ export class StorageConfig {
 
   @UpdateDateColumn()
   updatedAt: Date;
-} 
+}

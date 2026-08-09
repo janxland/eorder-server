@@ -33,4 +33,4 @@ export const CdnConfigSchema = SchemaFactory.createForClass(CdnConfig);
 
 CdnConfigSchema.index({ userId: 1 });
 
-export type CdnConfigDocument = CdnConfig & Document;
+export type CdnConfigDocument = CdnConfig & Document & { model?: string };

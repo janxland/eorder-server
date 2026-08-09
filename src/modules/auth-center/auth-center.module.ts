@@ -9,6 +9,7 @@ import { UserModule } from '../user/user.module';
 import { SharedModule } from '@/shared/shared.module';
 import { User } from '../user/user.entity';
 import { Role } from '../role/role.entity';
+import { OAuthModule } from './oauth/oauth.module';
 
 @Module({
   imports: [
@@ -23,9 +24,10 @@ import { Role } from '../role/role.entity';
         signOptions: { expiresIn: '3h' },
       }),
     }),
+    OAuthModule,
   ],
   controllers: [AuthCenterController],
   providers: [AuthCenterService],
-  exports: [AuthCenterService],
+  exports: [AuthCenterService, OAuthModule],
 })
 export class AuthCenterModule {}
