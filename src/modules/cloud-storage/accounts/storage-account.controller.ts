@@ -30,7 +30,14 @@ export class StorageAccountController {
   @RequirePermission(PermissionCode.SHOW_STORAGE_CONFIG_LIST)
   async findAll() {
     const accounts = await this.accountService.findAll();
-    return { success: true, data: accounts };
+    // 列表也解密出掩码（确认账号已配置密钥）；明文仅详情 + SUPER_ADMIN 可见
+    const safeList = await Promise.all(
+      accounts.map(async (a) => {
+        const creds = await this.accountService.getCredentials(a.id).catch(() => null);
+        return this.accountService.toSafe(a, creds?.accessKey || '', creds?.secretKey || '', false);
+      }),
+    );
+    return { success: true, data: safeList };
   }
 
   @Get(':id')
