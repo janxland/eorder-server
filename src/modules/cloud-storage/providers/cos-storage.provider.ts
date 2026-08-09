@@ -251,14 +251,22 @@ export class CosStorageProvider implements CloudStorageInterface {
             {
               effect: 'allow',
               action: [
-                // 权限自检（checkCOSPermission 用 getService）
+                // 全局：getService 是权限自检入口（checkCOSPermission），resource 需为 *
                 'cos:GetService',
+              ],
+              resource: ['*'],
+            },
+            {
+              effect: 'allow',
+              action: [
                 // 桶级：列目录/头探测（GetBucket/HeadBucket 需用桶级资源）
+                // 注：腾讯云 STS 最小权限官方做法即 GetBucket 用 bucket/*（只读列目录，前端静态资源本就 public-read，
+                //     增量风险可忽略）；真正红线是写/删，已在下一条 statement 严格收敛到授权 prefix
                 'cos:GetBucket',
                 'cos:HeadBucket',
                 'cos:ListMultipartUploads',
               ],
-              resource: [bucketResource],
+              resource: [bucketResource, `${bucketResource}/*`],
             },
             {
               effect: 'allow',
