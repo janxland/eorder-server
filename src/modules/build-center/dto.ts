@@ -3,7 +3,7 @@
  * website: https://www.roginx.ink
  */
 
-import { IsArray, IsIn, IsNotEmpty, IsOptional, IsString, ArrayMinSize, ArrayMaxSize, Matches } from 'class-validator';
+import { IsArray, IsIn, IsNotEmpty, IsOptional, IsString, IsNumber, ArrayMinSize, ArrayMaxSize, Matches } from 'class-validator';
 
 /** 版本号口径与 monorepo build-deploy.yml 一致：字母/数字开头，[A-Za-z0-9._-]，≤64 字符 */
 export const VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -71,4 +71,31 @@ export class QueryBuildsDto {
   @IsOptional()
   @IsString()
   limit?: string;
+}
+
+/**
+ * 外部构建落账 DTO（quick-upload 本地链路；版本目录必须已真实存在于 COS）
+ */
+export class RecordExternalDto {
+  @IsString()
+  @IsNotEmpty()
+  app: string;
+
+  @Matches(VERSION_PATTERN)
+  version: string;
+
+  @IsOptional()
+  @IsIn(['gray', 'prod'])
+  target?: 'gray' | 'prod';
+}
+
+/**
+ * 版本回收审批 DTO：批准删除扫描出的待清理版本目录（立即执行物理删除）
+ */
+export class ApproveCleanupDto {
+  @IsArray()
+  @IsNumber({}, { each: true })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  ids: number[];
 }

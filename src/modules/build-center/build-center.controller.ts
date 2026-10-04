@@ -6,7 +6,7 @@
 import { Controller, Get, Post, Body, Param, Query, Req, UseGuards, ParseIntPipe } from '@nestjs/common';
 import { Request } from 'express';
 import { BuildCenterService } from './build-center.service';
-import { TriggerBuildDto, PromoteDto, RollbackDto, QueryBuildsDto } from './dto';
+import { TriggerBuildDto, PromoteDto, RollbackDto, QueryBuildsDto, ApproveCleanupDto, RecordExternalDto } from './dto';
 import { AuthCenterGuard } from '@/common/guards/auth-center.guard';
 import { PermissionCodeGuard } from '@/common/guards/permission-code.guard';
 import { RequirePermission } from '@/common/decorators/permission.decorator';
@@ -92,5 +92,44 @@ export class BuildCenterController {
   @RequirePermission(PermissionCode.SHOW_BUILD_CENTER_LIST)
   async status() {
     return this.buildCenterService.status();
+  }
+
+  /**
+   * 外部构建落账（quick-upload 本地/应急链路）：与 CI 构建同一 MySQL 账本（单一账本）
+   */
+  @Post('records')
+  @RequirePermission(PermissionCode.TRIGGER_BUILD_CENTER_BUILD)
+  async recordExternal(@Body() dto: RecordExternalDto, @Req() req: Request) {
+    return this.buildCenterService.recordExternalDeploy(dto, this.triggeredBy(req));
+  }
+
+  // ==================== 版本回收 ====================
+
+  /**
+   * 手动触发回收扫描（定时扫描也每日自动跑；两者都只落计划，绝不删除）
+   */
+  @Post('cleanup/scan')
+  @RequirePermission(PermissionCode.SHOW_BUILD_CENTER_LIST)
+  async cleanupScan() {
+    return this.buildCenterService.cleanupScan();
+  }
+
+  /**
+   * 回收计划视图：待批 / 人工确认 / 保护中 / 最近已清理
+   */
+  @Get('cleanup/plan')
+  @RequirePermission(PermissionCode.SHOW_BUILD_CENTER_LIST)
+  async cleanupPlan() {
+    return this.buildCenterService.cleanupPlan();
+  }
+
+  /**
+   * 审批清理：立即物理删除选中版本目录（pending / review 两类可批；
+   * 审批时点重新校验生产指针与灰度绑定，灰度检查失败一律拒绝）
+   */
+  @Post('cleanup/approve')
+  @RequirePermission(PermissionCode.CLEANUP_BUILD_CENTER_VERSION)
+  async cleanupApprove(@Body() dto: ApproveCleanupDto, @Req() req: Request) {
+    return this.buildCenterService.cleanupApprove(dto.ids, this.triggeredBy(req));
   }
 }

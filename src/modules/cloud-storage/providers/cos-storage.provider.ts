@@ -353,6 +353,63 @@ export class CosStorageProvider implements CloudStorageInterface {
   }
 
   /**
+   * 列举对象（含大小与最后修改时间），key 为桶根路径绝对键（与 listObjectKeys 同口径）
+   * 构建中心版本回收扫描用：需要对象数、体积、目录年龄
+   */
+  async listObjectStats(prefix: string): Promise<Array<{ key: string; size: number; lastModified: Date | null }>> {
+    const out: Array<{ key: string; size: number; lastModified: Date | null }> = [];
+    let marker: string | undefined = undefined;
+    do {
+      const data: any = await new Promise((resolve, reject) => {
+        this.client.getBucket(
+          {
+            Bucket: this.config.bucket,
+            Region: this.config.region,
+            Prefix: prefix,
+            Marker: marker,
+            MaxKeys: 1000,
+          },
+          (err, result) => (err ? reject(err) : resolve(result)),
+        );
+      });
+      const contents = (data && data.Contents) || [];
+      contents.forEach((item: any) =>
+        out.push({
+          key: item.Key,
+          size: Number(item.Size || 0),
+          lastModified: item.LastModified ? new Date(item.LastModified) : null,
+        }),
+      );
+      marker = data && data.IsTruncated === 'true' ? data.NextMarker : undefined;
+    } while (marker);
+    return out;
+  }
+
+  /**
+   * 删除单个对象，key 为桶根路径绝对键（与 copyObject/listObjectKeys 同口径；
+   * deleteFile 是「配置前缀 + 相对键」口径，供文件管理功能使用，两者勿混）
+   * 版本回收（人工审批后）专用
+   */
+  async deleteObject(key: string): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      this.client.deleteObject(
+        {
+          Bucket: this.config.bucket,
+          Region: this.config.region,
+          Key: key,
+        },
+        (err, data) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(true);
+        },
+      );
+    });
+  }
+
+  /**
    * 同桶内服务端复制对象（putObjectCopy），返回目标对象 ETag
    * 小对象（微前端静态资源）直接简单复制；key 为桶根路径绝对键
    */

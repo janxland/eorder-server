@@ -224,6 +224,8 @@ export enum PermissionCode {
   ROLLBACK_BUILD_CENTER = 'ROLLBACK_BUILD_CENTER',
   /** 同步构建终态到账本 */
   SYNC_BUILD_CENTER = 'SYNC_BUILD_CENTER',
+  /** 版本回收：审批清理无用版本目录 */
+  CLEANUP_BUILD_CENTER_VERSION = 'CLEANUP_BUILD_CENTER_VERSION',
 }
 
 /**
@@ -356,6 +358,7 @@ export const PermissionCodeMap: Record<PermissionCode, string> = {
   [PermissionCode.PROMOTE_BUILD_CENTER]: 'promote 灰度转全量',
   [PermissionCode.ROLLBACK_BUILD_CENTER]: '生产回滚',
   [PermissionCode.SYNC_BUILD_CENTER]: '同步构建终态',
+  [PermissionCode.CLEANUP_BUILD_CENTER_VERSION]: '版本回收（审批清理无用版本）',
 };
 
 /**
