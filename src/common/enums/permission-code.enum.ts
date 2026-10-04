@@ -212,6 +212,18 @@ export enum PermissionCode {
   // ==================== CDN 脚本授权 ====================
   /** 根据设备指纹与脚本名签发 CDN 许可证密钥（管理后台） */
   ISSUE_CDN_SCRIPT_LICENSE = 'ISSUE_CDN_SCRIPT_LICENSE',
+
+  // ==================== 构建中心权限 ====================
+  /** 触发构建（派发 GitHub Actions） */
+  TRIGGER_BUILD_CENTER_BUILD = 'TRIGGER_BUILD_CENTER_BUILD',
+  /** 查看发版账本与状态 */
+  SHOW_BUILD_CENTER_LIST = 'SHOW_BUILD_CENTER_LIST',
+  /** promote：灰度转全量 */
+  PROMOTE_BUILD_CENTER = 'PROMOTE_BUILD_CENTER',
+  /** rollback：生产回滚 */
+  ROLLBACK_BUILD_CENTER = 'ROLLBACK_BUILD_CENTER',
+  /** 同步构建终态到账本 */
+  SYNC_BUILD_CENTER = 'SYNC_BUILD_CENTER',
 }
 
 /**
@@ -337,6 +349,13 @@ export const PermissionCodeMap: Record<PermissionCode, string> = {
   [PermissionCode.CLEAR_APP_GRAY_RELEASE]: '清理应用灰度白名单',
 
   [PermissionCode.ISSUE_CDN_SCRIPT_LICENSE]: '签发 CDN 脚本许可证密钥',
+
+  // 构建中心权限
+  [PermissionCode.TRIGGER_BUILD_CENTER_BUILD]: '触发构建',
+  [PermissionCode.SHOW_BUILD_CENTER_LIST]: '查看发版账本',
+  [PermissionCode.PROMOTE_BUILD_CENTER]: 'promote 灰度转全量',
+  [PermissionCode.ROLLBACK_BUILD_CENTER]: '生产回滚',
+  [PermissionCode.SYNC_BUILD_CENTER]: '同步构建终态',
 };
 
 /**

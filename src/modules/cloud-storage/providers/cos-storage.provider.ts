@@ -325,6 +325,54 @@ export class CosStorageProvider implements CloudStorageInterface {
   }
   
   /**
+   * 列出指定前缀下的全部对象键（含分页遍历）
+   * 注意：key 为桶根路径绝对键，不叠加 config.prefix（与 STS 下发/部署脚本的键口径一致）
+   * @param prefix 键前缀，例如：www/micro/vue-app1/v1/
+   */
+  async listObjectKeys(prefix: string): Promise<string[]> {
+    const keys: string[] = [];
+    let marker: string | undefined = undefined;
+    do {
+      const data: any = await new Promise((resolve, reject) => {
+        this.client.getBucket(
+          {
+            Bucket: this.config.bucket,
+            Region: this.config.region,
+            Prefix: prefix,
+            Marker: marker,
+            MaxKeys: 1000,
+          },
+          (err, result) => (err ? reject(err) : resolve(result)),
+        );
+      });
+      const contents = (data && data.Contents) || [];
+      contents.forEach((item: any) => keys.push(item.Key));
+      marker = data && data.IsTruncated === 'true' ? data.NextMarker : undefined;
+    } while (marker);
+    return keys;
+  }
+
+  /**
+   * 同桶内服务端复制对象（putObjectCopy），返回目标对象 ETag
+   * 小对象（微前端静态资源）直接简单复制；key 为桶根路径绝对键
+   */
+  async copyObject(srcKey: string, destKey: string): Promise<string> {
+    const copySource = `${this.config.bucket}.cos.${this.config.region}.myqcloud.com/${encodeURIComponent(srcKey).replace(/%2F/g, '/')}`;
+    const data: any = await new Promise((resolve, reject) => {
+      this.client.putObjectCopy(
+        {
+          Bucket: this.config.bucket,
+          Region: this.config.region,
+          Key: destKey,
+          CopySource: copySource,
+        },
+        (err, result) => (err ? reject(err) : resolve(result)),
+      );
+    });
+    return data && data.ETag ? String(data.ETag) : '';
+  }
+
+  /**
    * 替换前缀中的模板标记
    * @param template 包含模板标记的字符串
    * @returns 替换后的字符串

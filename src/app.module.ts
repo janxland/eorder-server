@@ -20,6 +20,7 @@ import { AIModelModule } from './modules/ai-model/ai-model.module';
 import { LLMModule } from './modules/llm/llm.module';
 import { GrayReleaseModule } from './modules/gray-release/gray-release.module';
 import { CdnScriptModule } from './modules/cdn-script/cdn-script.module';
+import { BuildCenterModule } from './modules/build-center/build-center.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { CdnScriptModule } from './modules/cdn-script/cdn-script.module';
     LLMModule,
     GrayReleaseModule,
     CdnScriptModule,
+    BuildCenterModule,
   ],
 })
 export class AppModule {}

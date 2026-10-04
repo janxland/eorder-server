@@ -99,4 +99,17 @@ export interface CloudStorageInterface {
    * @param expires 过期时间（秒）
    */
   generateTempCredentials(prefix?: string, expires?: number): Promise<any>;
+
+  /**
+   * 列出指定前缀下的对象键（桶根路径绝对键，不叠加配置 prefix）
+   * @param prefix 键前缀，例如：www/micro/vue-app1/v1/
+   */
+  listObjectKeys?(prefix: string): Promise<string[]>;
+
+  /**
+   * 服务端对象复制（同桶内），返回目标对象 ETag
+   * @param srcKey 源对象键（桶根路径绝对键）
+   * @param destKey 目标对象键（桶根路径绝对键）
+   */
+  copyObject?(srcKey: string, destKey: string): Promise<string>;
 } 
