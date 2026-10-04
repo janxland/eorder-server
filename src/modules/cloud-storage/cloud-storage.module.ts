@@ -31,6 +31,6 @@ import { StorageAccountController } from './accounts/storage-account.controller'
     KeyVaultService,
     StorageAccountService,
   ],
-  exports: [CloudStorageService, StorageConfigService, StorageAccountService, KeyVaultService],
+  exports: [CloudStorageService, StorageConfigService, StorageAccountService, KeyVaultService, CloudStorageFactory],
 })
 export class CloudStorageModule {}
