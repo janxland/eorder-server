@@ -22,6 +22,7 @@ import {
   BatchDeleteGrayReleaseDto,
   QueryGrayReleaseDto,
   UpdateGrayReleaseDto,
+  CanaryPolicyDto,
 } from './dto';
 import { AuthCenterGuard } from '@/common/guards/auth-center.guard';
 import { PermissionCodeGuard } from '@/common/guards/permission-code.guard';
@@ -155,6 +156,26 @@ export class GrayReleaseController {
   @RequirePermission(PermissionCode.CLEAR_APP_GRAY_RELEASE)
   async clear(@Param('appId') appId: string) {
     return this.grayReleaseService.clearAppGrayRelease(appId);
+  }
+
+  /**
+   * 设置百分比金丝雀策略（weight 0-100，0 = 关闭）。
+   * 白名单未命中时按 FNV-1a 确定性分桶放量，同身份恒同结果。
+   */
+  @Put('canary-policy/:appId')
+  @RequirePermission(PermissionCode.UPDATE_GRAY_RELEASE)
+  async setCanaryPolicy(@Param('appId') appId: string, @Body() dto: CanaryPolicyDto) {
+    await this.grayReleaseService.setCanaryPolicy(appId, dto.version, dto.weight);
+    return { appId, enabled: dto.weight > 0, version: dto.version, weight: dto.weight };
+  }
+
+  /**
+   * 查询百分比金丝雀策略
+   */
+  @Get('canary-policy/:appId')
+  @RequirePermission(PermissionCode.SHOW_GRAY_RELEASE_LIST)
+  async getCanaryPolicy(@Param('appId') appId: string) {
+    return { appId, policy: await this.grayReleaseService.getCanaryPolicy(appId) };
   }
 }
 

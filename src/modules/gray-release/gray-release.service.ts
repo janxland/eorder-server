@@ -20,6 +20,12 @@ import {
  */
 const GRAY_RELEASE_KEY_PREFIX = 'gray:user:version';
 
+/**
+ * 百分比金丝雀策略 Key 前缀
+ * 格式：gray:canary:policy:{appId} → {version, weight}
+ */
+const GRAY_CANARY_POLICY_PREFIX = 'gray:canary:policy';
+
 @Injectable()
 export class GrayReleaseService {
   private readonly logger = new Logger(GrayReleaseService.name);
@@ -31,6 +37,50 @@ export class GrayReleaseService {
    */
   private getRedisKey(appId: string): string {
     return `${GRAY_RELEASE_KEY_PREFIX}:${appId}`;
+  }
+
+  /**
+   * FNV-1a 32 位哈希：确定性分桶（同身份恒同结果，零依赖）
+   */
+  private fnv1a32(input: string): number {
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < input.length; i++) {
+      hash ^= input.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return hash >>> 0;
+  }
+
+  /**
+   * 设置百分比金丝雀策略（weight 0 = 关闭并删除策略）
+   */
+  async setCanaryPolicy(appId: string, version: string, weight: number): Promise<void> {
+    if (weight < 0 || weight > 100) {
+      throw new BadRequestException('weight 必须在 0-100 之间');
+    }
+    const key = `${GRAY_CANARY_POLICY_PREFIX}:${appId}`;
+    if (weight <= 0) {
+      await this.redisService.del(key);
+      return;
+    }
+    await this.redisService.set(key, JSON.stringify({ version, weight }));
+  }
+
+  /**
+   * 查询百分比金丝雀策略
+   */
+  async getCanaryPolicy(appId: string): Promise<{ version: string; weight: number } | null> {
+    const raw = await this.redisService.get(`${GRAY_CANARY_POLICY_PREFIX}:${appId}`);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.version === 'string' && typeof parsed.weight === 'number') {
+        return parsed;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -252,13 +302,23 @@ export class GrayReleaseService {
 
   /**
    * 获取用户的灰度版本（供 Nginx 等外部服务调用）
-   * 低耦合设计：不依赖其他模块，仅操作 Redis
+   * 低耦合设计：不依赖其他模块，仅操作 Redis。
+   * 白名单未命中时与 getUserAllGrayVersions 同口径套用百分比金丝雀，
+   * 保证两个读取口对同一身份给出同一结论。
    */
   async getUserGrayVersion(appId: string, userId: string): Promise<string | null> {
     const key = this.getRedisKey(appId);
     try {
       const version = await this.redisService.hGet(key, userId);
-      return version || null;
+      if (version) return version;
+      const policy = await this.getCanaryPolicy(appId);
+      if (policy && policy.weight > 0) {
+        const bucket = this.fnv1a32(`${appId}:${userId}`) % 10000;
+        if (bucket < policy.weight * 100) {
+          return policy.version;
+        }
+      }
+      return null;
     } catch (error) {
       this.logger.error(`获取用户灰度版本失败: ${error.message}`, error.stack);
       // 降级：返回 null，让调用方路由到生产版本
@@ -346,12 +406,13 @@ export class GrayReleaseService {
     userId: string,
     appIds?: string[],
   ): Promise<Record<string, string | null>> {
-    // 默认查询所有已知应用
+    // 默认查询所有已知应用（与 scripts/build-center/apps.json 家族注册表对齐）
     const defaultAppIds = [
+      'vue-base',
       'vue-app1',
       'vue-app2',
+      'vue-app3',
       'vue-build',
-      'react-devops',
       'vue-devops',
     ];
     const targetAppIds = appIds && appIds.length > 0 ? appIds : defaultAppIds;
@@ -362,7 +423,16 @@ export class GrayReleaseService {
         const key = this.getRedisKey(appId);
         try {
           const version = await this.redisService.hGet(key, userId);
-          return { appId, version: version || null };
+          if (version) return { appId, version };
+          // 白名单未命中 → 百分比金丝雀：确定性分桶（同身份恒同结果）
+          const policy = await this.getCanaryPolicy(appId);
+          if (policy && policy.weight > 0) {
+            const bucket = this.fnv1a32(`${appId}:${userId}`) % 10000;
+            if (bucket < policy.weight * 100) {
+              return { appId, version: policy.version };
+            }
+          }
+          return { appId, version: null };
         } catch (error) {
           this.logger.warn(`查询应用 ${appId} 灰度版本失败: ${error.message}`);
           return { appId, version: null };
